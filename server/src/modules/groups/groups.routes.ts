@@ -3,6 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js'
 import { asyncHandler } from '../../utils/asyncHandler.js'
 import {
   createGroupCommentController,
+  createGroupController,
   createGroupPostController,
   getGroupController,
   joinGroupController,
@@ -14,6 +15,7 @@ import {
 export const groupsRouter = Router()
 
 groupsRouter.get('/', asyncHandler(listGroupsController))
+groupsRouter.post('/', authMiddleware, asyncHandler(createGroupController))
 groupsRouter.get('/:groupId', asyncHandler(getGroupController))
 groupsRouter.post('/:groupId/join', authMiddleware, asyncHandler(joinGroupController))
 groupsRouter.delete('/:groupId/join', authMiddleware, asyncHandler(leaveGroupController))

@@ -8,6 +8,7 @@ type RecommendationRow = {
   description: string
   price_cents: number
   rating: string
+  cover_url: string | null
   cover_tone: string
   cover_tone_two: string
   genres: string[]
@@ -23,6 +24,7 @@ function toRecommendation(row: RecommendationRow) {
     description: row.description,
     priceCents: row.price_cents,
     rating: Number(row.rating),
+    coverUrl: row.cover_url,
     coverTone: row.cover_tone,
     coverToneTwo: row.cover_tone_two,
     genres: row.genres ?? [],
@@ -63,6 +65,7 @@ export async function getRecommendations(userId: string) {
         g.description,
         g.price_cents,
         g.rating,
+        g.cover_url,
         g.cover_tone,
         g.cover_tone_two,
         COALESCE(array_agg(DISTINCT ge.name) FILTER (WHERE ge.name IS NOT NULL), '{}') AS genres,

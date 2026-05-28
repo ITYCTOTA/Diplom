@@ -1,7 +1,7 @@
 import type { Request, Response } from 'express'
 import type { AuthRequest } from '../../types/http.js'
 import { requireString } from '../../utils/validation.js'
-import { loginUser, registerUser } from './auth.service.js'
+import { getCurrentUser, loginUser, registerUser } from './auth.service.js'
 
 export async function registerController(request: Request, response: Response) {
   const email = requireString(request.body.email, 'email').toLowerCase()
@@ -21,5 +21,7 @@ export async function loginController(request: Request, response: Response) {
 }
 
 export async function meController(request: AuthRequest, response: Response) {
-  response.json({ user: request.user })
+  const user = await getCurrentUser(request.user!.id)
+
+  response.json({ user })
 }

@@ -5,10 +5,12 @@ import {
   acceptFriendRequestController,
   createFriendRequestController,
   listFriendsController,
+  searchUsersController,
 } from './friends.controller.js'
 
 export const friendsRouter = Router()
 
 friendsRouter.get('/', authMiddleware, asyncHandler(listFriendsController))
+friendsRouter.get('/search', authMiddleware, asyncHandler(searchUsersController))
 friendsRouter.post('/request/:userId', authMiddleware, asyncHandler(createFriendRequestController))
 friendsRouter.post('/accept/:requestId', authMiddleware, asyncHandler(acceptFriendRequestController))

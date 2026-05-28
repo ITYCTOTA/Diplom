@@ -3,6 +3,7 @@ import type { AuthRequest } from '../../types/http.js'
 import { requireString } from '../../utils/validation.js'
 import {
   createGroupComment,
+  createGroup,
   createGroupPost,
   getGroup,
   getGroups,
@@ -15,6 +16,14 @@ export async function listGroupsController(_request: Request, response: Response
   const groups = await getGroups()
 
   response.json({ groups })
+}
+
+export async function createGroupController(request: AuthRequest, response: Response) {
+  const title = requireString(request.body.title, 'title')
+  const description = requireString(request.body.description, 'description')
+  const group = await createGroup(request.user!.id, title, description)
+
+  response.status(201).json({ group })
 }
 
 export async function getGroupController(request: Request, response: Response) {

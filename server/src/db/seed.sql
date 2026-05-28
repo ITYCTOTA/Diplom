@@ -1,14 +1,15 @@
-INSERT INTO users (id, email, password_hash, nickname, bio)
+INSERT INTO users (id, email, password_hash, nickname, bio, wallet_balance_cents)
 VALUES
-  ('11111111-1111-1111-1111-111111111111', 'ityctota@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'ITYCTOTA', 'Любит RPG, стратегии и короткие вечерние сессии.'),
-  ('22222222-2222-2222-2222-222222222222', 'mira@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'Mira', 'Исследует новые сезоны и собирает карты событий.'),
-  ('33333333-3333-3333-3333-333333333333', 'oleg@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'Oleg', 'Играет в симуляторы и тактические стратегии.'),
-  ('44444444-4444-4444-4444-444444444444', 'nika@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'Nika', 'Пишет отзывы и участвует в турнирах.')
+  ('11111111-1111-1111-1111-111111111111', 'ityctota@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'ITYCTOTA', 'Любит RPG, стратегии и короткие вечерние сессии.', 750000),
+  ('22222222-2222-2222-2222-222222222222', 'mira@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'Mira', 'Исследует новые сезоны и собирает карты событий.', 420000),
+  ('33333333-3333-3333-3333-333333333333', 'oleg@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'Oleg', 'Играет в симуляторы и тактические стратегии.', 280000),
+  ('44444444-4444-4444-4444-444444444444', 'nika@example.com', '$2a$10$.9Fw4tAv9fM.QrrUqDGZRuB4hSXW/8CPVt8Nq2H791iTQFpGQxfhy', 'Nika', 'Пишет отзывы и участвует в турнирах.', 180000)
 ON CONFLICT (email) DO UPDATE
 SET
   password_hash = EXCLUDED.password_hash,
   nickname = EXCLUDED.nickname,
-  bio = EXCLUDED.bio;
+  bio = EXCLUDED.bio,
+  wallet_balance_cents = EXCLUDED.wallet_balance_cents;
 
 INSERT INTO genres (id, name)
 VALUES
@@ -100,6 +101,12 @@ VALUES
   ('30000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002', '44444444-4444-4444-4444-444444444444', 'Сетка турнира на выходные', 'Открыла регистрацию на 32 участника, первые матчи начинаются в субботу вечером.')
 ON CONFLICT (id) DO NOTHING;
 
+INSERT INTO group_comments (id, post_id, author_id, text)
+VALUES
+  ('31000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Отметки наград помогли быстрее закрыть вторую цепочку.'),
+  ('31000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '33333333-3333-3333-3333-333333333333', 'Можно добавить резервный слот для участников, которые не успеют подтвердить участие.')
+ON CONFLICT (id) DO NOTHING;
+
 INSERT INTO group_likes (post_id, user_id)
 VALUES
   ('30000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111'),
@@ -111,6 +118,13 @@ VALUES
   ('11111111-1111-1111-1111-111111111111', '10000000-0000-0000-0000-000000000001', CURRENT_DATE - INTERVAL '1 day', 95),
   ('11111111-1111-1111-1111-111111111111', '10000000-0000-0000-0000-000000000002', CURRENT_DATE - INTERVAL '2 days', 42),
   ('11111111-1111-1111-1111-111111111111', '10000000-0000-0000-0000-000000000003', CURRENT_DATE - INTERVAL '4 days', 70);
+
+INSERT INTO user_posts (id, user_id, text)
+VALUES
+  ('40000000-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', 'Сегодня добрал пару коротких сессий в Starfall Odyssey и уже вижу, куда пойдёт следующий апдейт.'),
+  ('40000000-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Спокойный вечер под тактику и без лишнего шума. Как раз тот темп, который мне нужен.'),
+  ('40000000-0000-0000-0000-000000000003', '11111111-1111-1111-1111-111111111111', 'Собрал заметки по нескольким играм из списка и оставил всё в ленте, чтобы не потерять идеи.')
+ON CONFLICT DO NOTHING;
 
 INSERT INTO friendships (user_id, friend_id)
 VALUES

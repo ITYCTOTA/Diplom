@@ -3,20 +3,37 @@ import jwt, { type SignOptions } from 'jsonwebtoken'
 import { env } from '../../config/env.js'
 import { query } from '../../db/pool.js'
 import type { AuthUser } from '../../types/http.js'
-import { HttpError } from '../../utils/httpError.js'
+import { HttpError, notFound } from '../../utils/httpError.js'
 
 type UserRow = {
   id: string
   email: string
   password_hash: string
   nickname: string
+  wallet_balance_cents: number
 }
 
-function publicUser(row: UserRow) {
+type PublicUser = {
+  id: string
+  email: string
+  nickname: string
+  walletBalanceCents: number
+}
+
+function publicUser(row: UserRow): PublicUser {
   return {
     id: row.id,
     email: row.email,
     nickname: row.nickname,
+    walletBalanceCents: row.wallet_balance_cents,
+  }
+}
+
+function tokenUser(user: PublicUser): AuthUser {
+  return {
+    id: user.id,
+    email: user.email,
+    nickname: user.nickname,
   }
 }
 
@@ -40,13 +57,13 @@ export async function registerUser(email: string, password: string, nickname: st
     `
       INSERT INTO users (email, password_hash, nickname)
       VALUES ($1, $2, $3)
-      RETURNING id, email, password_hash, nickname
+      RETURNING id, email, password_hash, nickname, wallet_balance_cents
     `,
     [email, passwordHash, nickname],
   )
   const user = publicUser(result.rows[0])
 
-  return { user, token: signToken(user) }
+  return { user, token: signToken(tokenUser(user)) }
 }
 
 export async function loginUser(email: string, password: string) {
@@ -65,5 +82,28 @@ export async function loginUser(email: string, password: string) {
 
   const user = publicUser(row)
 
-  return { user, token: signToken(user) }
+  return { user, token: signToken(tokenUser(user)) }
+}
+
+export async function getCurrentUser(userId: string) {
+  const result = await query<UserRow>(
+    `
+      SELECT
+        id,
+        email,
+        password_hash,
+        nickname,
+        wallet_balance_cents
+      FROM users
+      WHERE id = $1
+    `,
+    [userId],
+  )
+  const row = result.rows[0]
+
+  if (!row) {
+    throw notFound('Пользователь не найден')
+  }
+
+  return publicUser(row)
 }

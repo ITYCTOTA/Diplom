@@ -1,5 +1,15 @@
 import { friends as fallbackFriends, games as fallbackGames, groups as fallbackGroups } from '../data/gamehub'
-import type { AuthUser, Friend, Game, Group, GroupPost, Review, UserProfile } from '../types'
+import type {
+  AuthUser,
+  Friend,
+  FriendSearchResult,
+  Game,
+  Group,
+  GroupPost,
+  Review,
+  UserPost,
+  UserProfile,
+} from '../types'
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:4000/api').replace(
   /\/$/,
@@ -24,6 +34,7 @@ type ApiGameDto = {
   description: string
   priceCents: number
   rating: number
+  coverUrl?: string | null
   coverTone: string
   coverToneTwo: string
   genres: string[]
@@ -38,6 +49,10 @@ type ApiGroupDto = {
   coverTone: string
   coverToneTwo: string
   createdAt: string
+  creator: {
+    id: string
+    nickname: string | null
+  } | null
   membersCount: number
   postsCount: number
   posts?: ApiGroupPostDto[]
@@ -54,6 +69,17 @@ type ApiGroupPostDto = {
   } | null
   likesCount: number
   commentsCount: number
+  comments?: ApiGroupCommentDto[]
+}
+
+type ApiGroupCommentDto = {
+  id: string
+  text: string
+  createdAt: string
+  author: {
+    id: string
+    nickname: string
+  } | null
 }
 
 type ApiFriendDto = {
@@ -61,6 +87,13 @@ type ApiFriendDto = {
   nickname: string
   bio: string | null
   friendsSince: string
+}
+
+type ApiFriendSearchDto = {
+  id: string
+  nickname: string
+  bio: string | null
+  relation: FriendSearchResult['relation']
 }
 
 type ApiRecommendationDto = {
@@ -76,6 +109,12 @@ type ApiLibraryItemDto = {
 
 type ApiProfileResponse = {
   profile: UserProfile
+}
+
+type ApiUserPostDto = {
+  id: string
+  text: string
+  createdAt: string
 }
 
 type ApiReviewsResponse = {
@@ -144,6 +183,40 @@ function formatDateTime(value: string) {
   }).format(date)
 }
 
+function deriveTopic(description: string) {
+  const normalized = description.trim().replace(/\s+/g, ' ')
+
+  if (normalized.length <= 52) {
+    return normalized
+  }
+
+  return `${normalized.slice(0, 49).trimEnd()}...`
+}
+
+function normalizeAuthUser(value: unknown): AuthUser | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+
+  const candidate = value as Partial<AuthUser>
+
+  if (
+    typeof candidate.id !== 'string' ||
+    typeof candidate.email !== 'string' ||
+    typeof candidate.nickname !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    id: candidate.id,
+    email: candidate.email,
+    nickname: candidate.nickname,
+    walletBalanceCents:
+      typeof candidate.walletBalanceCents === 'number' ? candidate.walletBalanceCents : 0,
+  }
+}
+
 function mapApiGame(dto: ApiGameDto, overrides: Partial<Game> = {}): Game {
   const fallback = fallbackGames.find((game) => game.id === dto.slug || game.title === dto.title)
   const genre = dto.genres[0] ?? fallback?.genre ?? 'Без жанра'
@@ -163,6 +236,7 @@ function mapApiGame(dto: ApiGameDto, overrides: Partial<Game> = {}): Game {
     reason: fallback?.reason ?? 'Подборка сформирована по жанрам, тегам и активности игрока.',
     activity: fallback?.activity ?? 'Данные синхронизированы с сервером',
     palette: [dto.coverTone, dto.coverToneTwo],
+    coverUrl: dto.coverUrl ?? fallback?.coverUrl ?? null,
     ...overrides,
   }
 }
@@ -176,6 +250,12 @@ function mapApiGroupPost(dto: ApiGroupPostDto): GroupPost {
     time: formatDateTime(dto.createdAt),
     likes: dto.likesCount,
     comments: dto.commentsCount,
+    commentList: dto.comments?.map((comment) => ({
+      id: comment.id,
+      author: comment.author?.nickname ?? 'Участник',
+      text: comment.text,
+      time: formatDateTime(comment.createdAt),
+    })),
   }
 }
 
@@ -188,16 +268,25 @@ function mapApiGroup(dto: ApiGroupDto): Group {
     id: dto.slug,
     title: dto.title,
     members: formatCount(dto.membersCount),
-    topic: fallback?.topic ?? 'последние публикации сообщества',
+    topic: fallback?.topic ?? deriveTopic(dto.description),
     description: dto.description,
     online: fallback?.online ?? formatCount(Math.max(1, Math.round(dto.membersCount / 3))),
     postsCount: formatCount(dto.postsCount),
     founded,
+    creator: dto.creator,
     gameIds: fallback?.gameIds ?? [],
     palette: [dto.coverTone, dto.coverToneTwo],
     rules: fallback?.rules ?? ['Публикации должны относиться к теме группы'],
-    posts: dto.posts?.map(mapApiGroupPost) ?? fallback?.posts ?? [],
-    discussions: fallback?.discussions ?? [],
+    posts: dto.posts?.map(mapApiGroupPost) ?? [],
+    discussions: [],
+  }
+}
+
+function mapApiUserPost(dto: ApiUserPostDto): UserPost {
+  return {
+    id: dto.id,
+    text: dto.text,
+    createdAt: dto.createdAt,
   }
 }
 
@@ -213,6 +302,15 @@ function mapApiFriend(dto: ApiFriendDto, index: number): Friend {
   }
 }
 
+function mapApiFriendSearchResult(dto: ApiFriendSearchDto): FriendSearchResult {
+  return {
+    id: dto.id,
+    name: dto.nickname,
+    bio: dto.bio,
+    relation: dto.relation,
+  }
+}
+
 export function readStoredSession(): AuthSession | null {
   const token = localStorage.getItem(TOKEN_STORAGE_KEY)
   const rawUser = localStorage.getItem(USER_STORAGE_KEY)
@@ -222,7 +320,12 @@ export function readStoredSession(): AuthSession | null {
   }
 
   try {
-    const user = JSON.parse(rawUser) as AuthUser
+    const user = normalizeAuthUser(JSON.parse(rawUser))
+
+    if (!user) {
+      throw new Error('Invalid session')
+    }
+
     return { token, user }
   } catch {
     localStorage.removeItem(TOKEN_STORAGE_KEY)
@@ -256,9 +359,28 @@ export async function fetchGroups() {
   return response.groups.map((group) => mapApiGroup(group))
 }
 
+export async function createGroup(token: string, title: string, description: string) {
+  const response = await apiRequest<{ group: ApiGroupDto }>('/groups', {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ title, description }),
+  })
+
+  return mapApiGroup(response.group)
+}
+
 export async function fetchGroup(groupId: string) {
   const response = await apiRequest<{ group: ApiGroupDto }>(`/groups/${groupId}`)
   return mapApiGroup(response.group)
+}
+
+export async function createGroupPost(groupId: string, title: string, text: string) {
+  const response = await apiRequest<{ post: ApiGroupPostDto }>(`/groups/${groupId}/posts`, {
+    method: 'POST',
+    body: JSON.stringify({ title, text }),
+  })
+
+  return mapApiGroupPost(response.post)
 }
 
 export async function loginUser(email: string, password: string) {
@@ -273,6 +395,11 @@ export async function registerUser(email: string, password: string, nickname: st
     method: 'POST',
     body: JSON.stringify({ email, password, nickname }),
   })
+}
+
+export async function fetchCurrentUser(token: string) {
+  const response = await apiRequest<{ user: AuthUser }>('/auth/me', { token })
+  return response.user
 }
 
 export async function fetchLibrary(token: string) {
@@ -297,9 +424,35 @@ export async function fetchProfile(token: string) {
   return response.profile
 }
 
+export async function createProfilePost(text: string, token: string) {
+  const response = await apiRequest<{ post: ApiUserPostDto }>('/profile/me/posts', {
+    method: 'POST',
+    token,
+    body: JSON.stringify({ text }),
+  })
+
+  return mapApiUserPost(response.post)
+}
+
 export async function fetchFriends(token: string) {
   const response = await apiRequest<{ friends: ApiFriendDto[] }>('/friends', { token })
   return response.friends.map(mapApiFriend)
+}
+
+export async function searchUsers(token: string, query: string) {
+  const searchParams = new URLSearchParams({ query })
+  const response = await apiRequest<{ users: ApiFriendSearchDto[] }>(`/friends/search?${searchParams.toString()}`, {
+    token,
+  })
+
+  return response.users.map(mapApiFriendSearchResult)
+}
+
+export async function createFriendRequest(userId: string, token: string) {
+  return apiRequest<{ friendRequest: unknown }>(`/friends/request/${userId}`, {
+    method: 'POST',
+    token,
+  })
 }
 
 export async function createPurchase(gameId: string, token: string) {

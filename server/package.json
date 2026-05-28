@@ -8,7 +8,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/server.js",
     "db:schema": "tsx src/db/runSqlFile.ts src/db/schema.sql",
-    "db:seed": "tsx src/db/runSqlFile.ts src/db/seed.sql"
+    "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

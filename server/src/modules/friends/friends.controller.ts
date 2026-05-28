@@ -1,6 +1,7 @@
 import type { Response } from 'express'
 import type { AuthRequest } from '../../types/http.js'
-import { acceptFriendRequest, createFriendRequest, getFriends } from './friends.service.js'
+import { optionalString } from '../../utils/validation.js'
+import { acceptFriendRequest, createFriendRequest, getFriends, searchUsers } from './friends.service.js'
 
 export async function listFriendsController(request: AuthRequest, response: Response) {
   const friends = await getFriends(request.user!.id)
@@ -18,4 +19,11 @@ export async function acceptFriendRequestController(request: AuthRequest, respon
   const result = await acceptFriendRequest(request.user!.id, request.params.requestId)
 
   response.json(result)
+}
+
+export async function searchUsersController(request: AuthRequest, response: Response) {
+  const query = optionalString(request.query.query)
+  const users = await searchUsers(request.user!.id, query ?? '')
+
+  response.json({ users })
 }

@@ -4,20 +4,35 @@ import { priceLabel } from '../services/format'
 import type { Game } from '../types'
 
 type RecommendationsPageProps = {
+  isAuthenticated: boolean
   games: Game[]
-  wishlistSet: Set<string>
+  searchQuery: string
   onAdd: (game: Game) => void
   onOpen: (game: Game) => void
-  onWish: (game: Game) => void
 }
 
 export function RecommendationsPage({
+  isAuthenticated,
   games,
-  wishlistSet,
+  searchQuery,
   onAdd,
   onOpen,
-  onWish,
 }: RecommendationsPageProps) {
+  if (games.length === 0) {
+    return (
+      <section className="empty-state">
+        <div>
+          <h2>{searchQuery.trim().length > 0 ? 'Ничего не найдено' : 'Рекомендации пока пусты'}</h2>
+          <p>
+            {searchQuery.trim().length > 0
+              ? 'Попробуйте другой запрос в рекомендациях.'
+              : 'Когда система подберёт игры, они появятся здесь.'}
+          </p>
+        </div>
+      </section>
+    )
+  }
+
   return (
     <div className="recommendation-list">
       {games.map((game) => (
@@ -31,14 +46,16 @@ export function RecommendationsPage({
           </div>
           <div className="recommendation-actions">
             <strong>{game.discount ?? priceLabel(game.price)}</strong>
-            <button type="button" className="primary-button" onClick={() => onAdd(game)}>
+            <button
+              type="button"
+              className="primary-button"
+              disabled={!isAuthenticated}
+              onClick={() => onAdd(game)}
+            >
               Купить
             </button>
-            <button type="button" className="secondary-button" onClick={() => onWish(game)}>
-              {wishlistSet.has(game.id) ? 'В желаемом' : 'Запомнить'}
-            </button>
             <button type="button" className="ghost-button" onClick={() => onOpen(game)}>
-              Карточка
+              Подробнее
             </button>
           </div>
         </article>

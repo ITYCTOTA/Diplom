@@ -15,6 +15,13 @@ type RequestRow = {
   status: string
 }
 
+type SearchUserRow = {
+  id: string
+  nickname: string
+  bio: string | null
+  relation: string
+}
+
 export async function getFriends(userId: string) {
   const result = await query<FriendRow>(
     `
@@ -106,4 +113,57 @@ export async function acceptFriendRequest(userId: string, requestId: string) {
   } finally {
     client.release()
   }
+}
+
+export async function searchUsers(userId: string, queryText: string) {
+  const normalized = queryText.trim()
+
+  if (normalized.length < 2) {
+    return []
+  }
+
+  const like = `%${normalized}%`
+  const result = await query<SearchUserRow>(
+    `
+      SELECT
+        u.id,
+        u.nickname,
+        u.bio,
+        CASE
+          WHEN EXISTS (
+            SELECT 1
+            FROM friendships f
+            WHERE f.user_id = $2 AND f.friend_id = u.id
+          ) THEN 'friend'
+          WHEN EXISTS (
+            SELECT 1
+            FROM friend_requests fr
+            WHERE fr.requester_id = $2 AND fr.receiver_id = u.id AND fr.status = 'pending'
+          ) THEN 'request_sent'
+          WHEN EXISTS (
+            SELECT 1
+            FROM friend_requests fr
+            WHERE fr.requester_id = u.id AND fr.receiver_id = $2 AND fr.status = 'pending'
+          ) THEN 'request_received'
+          ELSE 'available'
+        END AS relation
+      FROM users u
+      WHERE u.id <> $2
+        AND (
+          u.nickname ILIKE $1
+          OR COALESCE(u.bio, '') ILIKE $1
+          OR u.email ILIKE $1
+        )
+      ORDER BY u.nickname ASC
+      LIMIT 20
+    `,
+    [like, userId],
+  )
+
+  return result.rows.map((row) => ({
+    id: row.id,
+    nickname: row.nickname,
+    bio: row.bio,
+    relation: row.relation,
+  }))
 }

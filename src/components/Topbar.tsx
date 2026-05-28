@@ -10,24 +10,24 @@ const titles: Record<ViewId, { eyebrow: string; title: string }> = {
   group: { eyebrow: 'Страница группы', title: 'Сообщество' },
   friends: { eyebrow: 'Социальный центр', title: 'Друзья' },
   profile: { eyebrow: 'Аккаунт', title: 'Профиль' },
+  auth: { eyebrow: 'Аккаунт', title: 'Авторизация' },
+}
+
+type SearchConfig = {
+  value: string
+  placeholder: string
+  onChange: (value: string) => void
+  onSubmit: () => void
 }
 
 export function Topbar({
   activeView,
   notice,
-  userName,
-  query,
-  onAuth,
-  onLogout,
-  onQuery,
+  search,
 }: {
   activeView: ViewId
   notice: string
-  userName?: string
-  query: string
-  onAuth: () => void
-  onLogout: () => void
-  onQuery: (query: string) => void
+  search?: SearchConfig
 }) {
   return (
     <header className="topbar">
@@ -36,24 +36,27 @@ export function Topbar({
         <h1>{titles[activeView].title}</h1>
         <p>{notice}</p>
       </div>
-      <div className="topbar-actions">
-        <label className="search-box">
+      {search ? (
+        <form
+          className="topbar-search"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault()
+            search.onSubmit()
+          }}
+        >
           <input
             type="search"
-            value={query}
-            placeholder="Название, жанр, тег"
-            onChange={(event) => onQuery(event.target.value)}
+            value={search.value}
+            placeholder={search.placeholder}
+            aria-label={search.placeholder}
+            onChange={(event) => search.onChange(event.target.value)}
           />
-        </label>
-        <button type="button" className="avatar-button" onClick={onAuth}>
-          {userName ?? 'Войти'}
-        </button>
-        {userName && (
-          <button type="button" className="ghost-button" onClick={onLogout}>
-            Выйти
+          <button type="submit" className="secondary-button">
+            Искать
           </button>
-        )}
-      </div>
+        </form>
+      ) : null}
     </header>
   )
 }

@@ -1,13 +1,26 @@
 import { useState, type FormEvent } from 'react'
-import { SectionTitle } from './ui'
+import { SectionTitle } from '../components/ui'
+import type { AuthUser } from '../types'
 
-type AuthModalProps = {
-  onClose: () => void
+type AuthPageProps = {
+  user: AuthUser | null
+  isChecking: boolean
   onLogin: (email: string, password: string) => Promise<void>
+  onLogout: () => void
+  onOpenProfile: () => void
   onRegister: (email: string, password: string, nickname: string) => Promise<void>
+  onSuccess: () => void
 }
 
-export function AuthModal({ onClose, onLogin, onRegister }: AuthModalProps) {
+export function AuthPage({
+  user,
+  isChecking,
+  onLogin,
+  onLogout,
+  onOpenProfile,
+  onRegister,
+  onSuccess,
+}: AuthPageProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -27,7 +40,7 @@ export function AuthModal({ onClose, onLogin, onRegister }: AuthModalProps) {
         await onRegister(email, password, nickname)
       }
 
-      onClose()
+      onSuccess()
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Не удалось выполнить вход')
     } finally {
@@ -35,10 +48,46 @@ export function AuthModal({ onClose, onLogin, onRegister }: AuthModalProps) {
     }
   }
 
+  if (isChecking) {
+    return (
+      <div className="auth-page-wrap">
+        <section className="auth-page panel">
+          <SectionTitle title="Проверка сессии" />
+          <p>Проверяем сохранённый вход.</p>
+        </section>
+      </div>
+    )
+  }
+
+  if (user) {
+    return (
+      <div className="auth-page-wrap">
+        <section className="auth-page panel">
+          <SectionTitle title="Вы уже вошли" />
+          <div className="auth-user-card">
+            <div className="profile-avatar">{user.nickname.slice(0, 1)}</div>
+            <div>
+              <h2>{user.nickname}</h2>
+              <p>{user.email}</p>
+            </div>
+          </div>
+          <div className="button-row">
+            <button type="button" className="primary-button" onClick={onOpenProfile}>
+              Открыть профиль
+            </button>
+            <button type="button" className="secondary-button" onClick={onLogout}>
+              Выйти
+            </button>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
   return (
-    <div className="modal-backdrop" role="presentation">
-      <section className="auth-modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-        <SectionTitle title={mode === 'login' ? 'Вход в GameHub' : 'Новый аккаунт'} meta="аккаунт" />
+    <div className="auth-page-wrap">
+      <section className="auth-page panel">
+        <SectionTitle title={mode === 'login' ? 'Вход в GameHub' : 'Регистрация'} />
         <form className="auth-form" onSubmit={submit}>
           <label>
             <span>Email</span>
@@ -46,7 +95,7 @@ export function AuthModal({ onClose, onLogin, onRegister }: AuthModalProps) {
               required
               type="email"
               value={email}
-              placeholder="user@mail.ru"
+              placeholder="ityctota@example.com"
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
@@ -85,10 +134,7 @@ export function AuthModal({ onClose, onLogin, onRegister }: AuthModalProps) {
               setMode(mode === 'login' ? 'register' : 'login')
             }}
           >
-            {mode === 'login' ? 'Создать аккаунт' : 'У меня уже есть аккаунт'}
-          </button>
-          <button type="button" className="ghost-button" onClick={onClose}>
-            Закрыть
+            {mode === 'login' ? 'Зарегистрироваться' : 'У меня уже есть аккаунт'}
           </button>
         </form>
       </section>

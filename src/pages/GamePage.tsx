@@ -2,29 +2,30 @@ import { useEffect, useState } from 'react'
 import { GameArt } from '../components/GameArt'
 import { Fact, Post, SectionTitle, TagRow } from '../components/ui'
 import { gameVars, priceLabel } from '../services/format'
+import { getGameBackLabel } from '../services/navigation'
 import { fetchGameReviews, getApiErrorMessage } from '../services/gameHubApi'
-import type { Game, Review } from '../types'
+import type { Game, Review, ViewId } from '../types'
 
 type GamePageProps = {
   game: Game
   games: Game[]
   inLibrary: boolean
-  isWishlisted: boolean
+  isAuthenticated: boolean
+  backView: ViewId
   onAdd: (game: Game) => void
   onBack: () => void
   onOpen: (game: Game) => void
-  onWish: (game: Game) => void
 }
 
 export function GamePage({
   game,
   games,
   inLibrary,
-  isWishlisted,
+  isAuthenticated,
+  backView,
   onAdd,
   onBack,
   onOpen,
-  onWish,
 }: GamePageProps) {
   const [reviews, setReviews] = useState<Review[]>([])
   const [reviewsError, setReviewsError] = useState('')
@@ -62,7 +63,7 @@ export function GamePage({
   return (
     <div className="view-stack">
       <button type="button" className="inline-back" onClick={onBack}>
-        Назад в магазин
+        {getGameBackLabel(backView)}
       </button>
       <section className="detail-layout">
         <article className="detail-hero panel" style={gameVars(game)}>
@@ -76,13 +77,10 @@ export function GamePage({
               <button
                 type="button"
                 className="primary-button"
-                disabled={inLibrary}
+                disabled={inLibrary || !isAuthenticated}
                 onClick={() => onAdd(game)}
               >
                 {inLibrary ? 'В библиотеке' : `Купить за ${priceLabel(game.price)}`}
-              </button>
-              <button type="button" className="secondary-button" onClick={() => onWish(game)}>
-                {isWishlisted ? 'Убрать из желаемого' : 'В желаемое'}
               </button>
             </div>
           </div>
@@ -91,8 +89,6 @@ export function GamePage({
         <aside className="panel facts-panel">
           <Fact label="Оценка" value={game.rating.toFixed(1)} />
           <Fact label="Жанр" value={game.genre} />
-          <Fact label="Настроение" value={game.mood} />
-          <Fact label="Время" value={`${game.hours} ч`} />
         </aside>
       </section>
 
@@ -112,24 +108,28 @@ export function GamePage({
                 />
               ))
             ) : (
-              <>
-                <Post author="Nika" text="Сильная атмосфера и понятный темп, без лишнего гринда." />
-                <Post author="Oleg" text="Лучше всего играть вечером: миссии короткие, но цепляют." />
-              </>
+              <div className="empty-state compact">
+                <div>
+                  <h2>Отзывов пока нет</h2>
+                  <p>Когда появятся реальные отзывы, они будут показаны здесь.</p>
+                </div>
+              </div>
             )}
           </div>
         </article>
         <article className="panel">
           <SectionTitle title="Похожие игры" meta={String(similarGames.length)} />
-          <div className="mini-grid">
+          <div className="similar-game-list">
             {similarGames.map((item) => (
-              <button key={item.id} type="button" className="mini-game" onClick={() => onOpen(item)}>
-                <GameArt game={item} size="small" />
-                <span>
+              <div key={item.id} className="similar-game-row">
+                <div>
                   <strong>{item.title}</strong>
-                  <small>{item.reason}</small>
-                </span>
-              </button>
+                  <p>{item.reason}</p>
+                </div>
+                <button type="button" className="secondary-button" onClick={() => onOpen(item)}>
+                  Подробнее
+                </button>
+              </div>
             ))}
           </div>
         </article>

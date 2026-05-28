@@ -8,6 +8,7 @@ export type ViewId =
   | 'group'
   | 'friends'
   | 'profile'
+  | 'auth'
 
 export type Game = {
   id: string
@@ -23,6 +24,7 @@ export type Game = {
   reason: string
   activity: string
   palette: [string, string]
+  coverUrl?: string | null
 }
 
 export type Group = {
@@ -34,6 +36,10 @@ export type Group = {
   online: string
   postsCount: string
   founded: string
+  creator?: {
+    id: string
+    nickname: string | null
+  } | null
   gameIds: string[]
   palette: [string, string]
   rules: string[]
@@ -49,6 +55,14 @@ export type GroupPost = {
   time: string
   likes: number
   comments: number
+  commentList?: GroupComment[]
+}
+
+export type GroupComment = {
+  id: string
+  author: string
+  text: string
+  time: string
 }
 
 export type GroupDiscussion = {
@@ -66,10 +80,18 @@ export type Friend = {
   level: number
 }
 
+export type FriendSearchResult = {
+  id: string
+  name: string
+  bio: string | null
+  relation: 'available' | 'friend' | 'request_sent' | 'request_received'
+}
+
 export type AuthUser = {
   id: string
   email: string
   nickname: string
+  walletBalanceCents: number
 }
 
 export type UserProfile = {
@@ -78,6 +100,7 @@ export type UserProfile = {
   nickname: string
   bio: string | null
   createdAt: string
+  walletBalanceCents: number
   stats: {
     libraryCount: number
     totalMinutes: number
@@ -85,6 +108,13 @@ export type UserProfile = {
     postsCount: number
     favoriteGameTitle: string | null
   }
+  posts: UserPost[]
+}
+
+export type UserPost = {
+  id: string
+  text: string
+  createdAt: string
 }
 
 export type Review = {
@@ -102,6 +132,7 @@ export type RouteState = {
   view: ViewId
   gameId: string
   groupId: string
+  backView: ViewId
 }
 
 export type GameArtSize = 'small' | 'medium' | 'card' | 'large' | 'detail'

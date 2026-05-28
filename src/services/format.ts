@@ -18,3 +18,11 @@ export function groupVars(group: Group) {
 export function priceLabel(price: number) {
   return `${price.toLocaleString('ru-RU')} ₽`
 }
+
+export function moneyLabel(amountCents: number) {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    maximumFractionDigits: 0,
+  }).format(amountCents / 100)
+}

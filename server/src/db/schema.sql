@@ -7,8 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
   nickname TEXT NOT NULL,
   avatar_url TEXT,
   bio TEXT,
+  wallet_balance_cents INTEGER NOT NULL DEFAULT 500000,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS wallet_balance_cents INTEGER NOT NULL DEFAULT 500000;
 
 CREATE TABLE IF NOT EXISTS games (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -17,10 +21,14 @@ CREATE TABLE IF NOT EXISTS games (
   description TEXT NOT NULL,
   price_cents INTEGER NOT NULL DEFAULT 0,
   rating NUMERIC(2, 1) NOT NULL DEFAULT 0,
+  cover_url TEXT,
   cover_tone TEXT NOT NULL DEFAULT '#8B5CF6',
   cover_tone_two TEXT NOT NULL DEFAULT '#38BDF8',
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE games
+  ADD COLUMN IF NOT EXISTS cover_url TEXT;
 
 CREATE TABLE IF NOT EXISTS genres (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -76,6 +84,13 @@ CREATE TABLE IF NOT EXISTS game_activity (
   game_id UUID NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   activity_date DATE NOT NULL,
   minutes INTEGER NOT NULL CHECK (minutes >= 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS user_posts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  text TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -142,5 +157,6 @@ CREATE TABLE IF NOT EXISTS friendships (
 
 CREATE INDEX IF NOT EXISTS games_title_idx ON games USING gin (to_tsvector('simple', title));
 CREATE INDEX IF NOT EXISTS game_activity_user_date_idx ON game_activity (user_id, activity_date);
+CREATE INDEX IF NOT EXISTS user_posts_user_date_idx ON user_posts (user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS group_posts_group_date_idx ON group_posts (group_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS friend_requests_receiver_idx ON friend_requests (receiver_id, status);

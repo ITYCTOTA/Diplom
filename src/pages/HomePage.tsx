@@ -5,21 +5,21 @@ import { gameVars } from '../services/format'
 import type { Game } from '../types'
 
 type HomePageProps = {
+  isAuthenticated: boolean
+  friendsCount: number
   games: Game[]
   libraryGames: Game[]
-  wishlistSet: Set<string>
   onAdd: (game: Game) => void
   onOpen: (game: Game) => void
-  onWish: (game: Game) => void
 }
 
 export function HomePage({
+  isAuthenticated,
+  friendsCount,
   games,
   libraryGames,
-  wishlistSet,
   onAdd,
   onOpen,
-  onWish,
 }: HomePageProps) {
   const heroGame = games.find((game) => game.id === 'starfall') ?? games[0]
 
@@ -45,40 +45,59 @@ export function HomePage({
               <button type="button" className="primary-button" onClick={() => onOpen(heroGame)}>
                 Продолжить
               </button>
-              <button type="button" className="secondary-button" onClick={() => onWish(heroGame)}>
-                В желаемое
-              </button>
             </div>
           </div>
           <GameArt game={heroGame} size="large" />
         </article>
 
         <section className="panel">
-          <SectionTitle title="Недавно играли" meta={`${libraryGames.length} в библиотеке`} />
-          <div className="recent-list">
-            {libraryGames.map((game) => (
-              <button
-                key={game.id}
-                type="button"
-                className="recent-item"
-                onClick={() => onOpen(game)}
-              >
-                <GameArt game={game} size="small" />
-                <span>
-                  <strong>{game.title}</strong>
-                  <small>{game.activity}</small>
-                </span>
-              </button>
-            ))}
-          </div>
+          {isAuthenticated ? (
+            <>
+              <SectionTitle title="Недавно играли" meta={`${libraryGames.length} в библиотеке`} />
+              {libraryGames.length > 0 ? (
+                <div className="recent-list">
+                  {libraryGames.map((game) => (
+                    <button
+                      key={game.id}
+                      type="button"
+                      className="recent-item"
+                      onClick={() => onOpen(game)}
+                    >
+                      <GameArt game={game} size="small" />
+                      <span>
+                        <strong>{game.title}</strong>
+                        <small>{game.activity}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="empty-state compact">
+                  <div>
+                    <h2>Библиотека пуста</h2>
+                    <p>Купленные игры появятся здесь после подтверждения оплаты.</p>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="empty-state compact">
+              <div>
+                <h2>Войдите в аккаунт</h2>
+                <p>Недавние игры и личная активность появятся после авторизации.</p>
+              </div>
+            </div>
+          )}
         </section>
       </section>
 
-      <section className="metrics-grid" aria-label="Сводка">
-        <Metric value={String(libraryGames.length)} label="игр в библиотеке" />
-        <Metric value="4" label="друга в сети" />
-        <Metric value={String(games.length)} label="игр в каталоге" />
-      </section>
+      {isAuthenticated ? (
+        <section className="metrics-grid" aria-label="Сводка">
+          <Metric value={String(libraryGames.length)} label="игр в библиотеке" />
+          <Metric value={String(friendsCount)} label="друга в сети" />
+          <Metric value={String(games.length)} label="игр в каталоге" />
+        </section>
+      ) : null}
 
       <section>
         <SectionTitle
@@ -94,10 +113,9 @@ export function HomePage({
                 key={game.id}
                 game={game}
                 inLibrary={libraryGames.some((item) => item.id === game.id)}
-                isWishlisted={wishlistSet.has(game.id)}
+                isAuthenticated={isAuthenticated}
                 onAdd={onAdd}
                 onOpen={onOpen}
-                onWish={onWish}
               />
             ))}
         </div>

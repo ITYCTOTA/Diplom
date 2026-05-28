@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { games as fallbackGames, groups as fallbackGroups } from '../data/gamehub'
 import {
-  friends as fallbackFriends,
-  games as fallbackGames,
-  groups as fallbackGroups,
-} from '../data/gamehub'
-import {
+  createFriendRequest,
+  createGroup as createGroupRequest,
   createPurchase,
+  createProfilePost as createProfilePostRequest,
   fetchFriends,
+  fetchCurrentUser,
   fetchGames,
   fetchGroups,
   fetchLibrary,
@@ -18,6 +18,7 @@ import {
   loginUser,
   readStoredSession,
   registerUser,
+  searchUsers as searchUsersRequest,
   storeSession,
   type AuthSession,
 } from '../services/gameHubApi'
@@ -26,20 +27,19 @@ import type { Friend, Game, Group, UserProfile } from '../types'
 export function useGameHubState() {
   const [games, setGames] = useState<Game[]>(fallbackGames)
   const [groups, setGroups] = useState<Group[]>(fallbackGroups)
-  const [friends, setFriends] = useState<Friend[]>(fallbackFriends)
+  const [friends, setFriends] = useState<Friend[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [recommendationGames, setRecommendationGames] = useState<Game[]>([])
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => readStoredSession())
-  const [libraryIds, setLibraryIds] = useState(['starfall', 'neon-runners', 'iron-valley'])
-  const [wishlistIds, setWishlistIds] = useState(['moon-station'])
-  const [joinedGroups, setJoinedGroups] = useState(['space-rpg'])
+  const [libraryIds, setLibraryIds] = useState<string[]>([])
+  const [joinedGroups, setJoinedGroups] = useState<string[]>([])
   const [notice, setNotice] = useState('Каталог игр загружен из базы данных')
   const [isSyncing, setIsSyncing] = useState(false)
+  const [isAuthChecking, setIsAuthChecking] = useState(Boolean(authSession))
   const [syncError, setSyncError] = useState<string | null>(null)
   const authToken = authSession?.token
 
   const librarySet = useMemo(() => new Set(libraryIds), [libraryIds])
-  const wishlistSet = useMemo(() => new Set(wishlistIds), [wishlistIds])
   const genres = useMemo(
     () => ['Все', ...Array.from(new Set(games.map((game) => game.genre)))],
     [games],
@@ -47,10 +47,6 @@ export function useGameHubState() {
   const libraryGames = useMemo(
     () => games.filter((game) => librarySet.has(game.id)),
     [games, librarySet],
-  )
-  const wishlistGames = useMemo(
-    () => games.filter((game) => wishlistSet.has(game.id)),
-    [games, wishlistSet],
   )
 
   useEffect(() => {
@@ -99,8 +95,11 @@ export function useGameHubState() {
     let isActive = true
 
     async function syncPrivateData(token: string) {
+      setIsAuthChecking(true)
+
       try {
-        const [apiLibrary, apiRecommendations, apiProfile, apiFriends] = await Promise.all([
+        const [apiUser, apiLibrary, apiRecommendations, apiProfile, apiFriends] = await Promise.all([
+          fetchCurrentUser(token),
           fetchLibrary(token),
           fetchRecommendations(token),
           fetchProfile(token),
@@ -111,10 +110,13 @@ export function useGameHubState() {
           return
         }
 
+        const verifiedSession = { token, user: apiUser }
+        storeSession(verifiedSession)
+        setAuthSession(verifiedSession)
         setLibraryIds(apiLibrary.map((game) => game.id))
         setRecommendationGames(apiRecommendations)
         setProfile(apiProfile)
-        setFriends(apiFriends.length > 0 ? apiFriends : fallbackFriends)
+        setFriends(apiFriends)
         setSyncError(null)
       } catch (error) {
         if (!isActive) {
@@ -122,8 +124,17 @@ export function useGameHubState() {
         }
 
         const message = getApiErrorMessage(error)
+        storeSession(null)
+        setAuthSession(null)
+        setProfile(null)
+        setFriends([])
+        setRecommendationGames([])
         setSyncError(message)
-        setNotice(`Не удалось получить данные аккаунта: ${message}`)
+        setNotice(`Сессия не подтверждена: ${message}`)
+      } finally {
+        if (isActive) {
+          setIsAuthChecking(false)
+        }
       }
     }
 
@@ -152,9 +163,10 @@ export function useGameHubState() {
     storeSession(null)
     setAuthSession(null)
     setProfile(null)
-    setFriends(fallbackFriends)
+    setFriends([])
     setRecommendationGames([])
-    setLibraryIds(['starfall', 'neon-runners', 'iron-valley'])
+    setLibraryIds([])
+    setJoinedGroups([])
     setNotice('Вы вышли из аккаунта')
   }, [])
 
@@ -164,39 +176,110 @@ export function useGameHubState() {
         return
       }
 
-      if (authToken) {
-        try {
-          await createPurchase(game.id, authToken)
-          setLibraryIds((current) => (current.includes(game.id) ? current : [...current, game.id]))
-          setNotice(`${game.title} куплена и добавлена в библиотеку`)
-        } catch (error) {
-          setNotice(`Покупка не выполнена: ${getApiErrorMessage(error)}`)
-        }
-
+      if (!authToken) {
+        setNotice('Войдите в аккаунт, чтобы покупать игры')
         return
       }
 
-      setLibraryIds((current) => [...current, game.id])
-      setNotice(`${game.title} добавлена в библиотеку в демо-режиме`)
+      try {
+        await createPurchase(game.id, authToken)
+        setLibraryIds((current) => (current.includes(game.id) ? current : [...current, game.id]))
+        setNotice(`${game.title} куплена и добавлена в библиотеку`)
+      } catch (error) {
+        setNotice(`Покупка не выполнена: ${getApiErrorMessage(error)}`)
+      }
     },
     [authToken, librarySet],
   )
 
-  const toggleWishlist = useCallback(
-    (game: Game) => {
-      const willAdd = !wishlistIds.includes(game.id)
-      setWishlistIds((current) =>
-        current.includes(game.id)
-          ? current.filter((id) => id !== game.id)
-          : [...current, game.id],
-      )
-      setNotice(willAdd ? `${game.title} добавлена в желаемое` : `${game.title} удалена`)
+  const createProfilePost = useCallback(
+    async (text: string) => {
+      if (!authToken) {
+        throw new Error('Требуется авторизация')
+      }
+
+      try {
+        const post = await createProfilePostRequest(text, authToken)
+
+        setProfile((current) => {
+          if (!current) {
+            return current
+          }
+
+          return {
+            ...current,
+            stats: {
+              ...current.stats,
+              postsCount: current.stats.postsCount + 1,
+            },
+            posts: [post, ...current.posts].slice(0, 6),
+          }
+        })
+        setNotice('Публикация добавлена')
+
+        return post
+      } catch (error) {
+        setNotice(`Публикация не добавлена: ${getApiErrorMessage(error)}`)
+        throw error
+      }
     },
-    [wishlistIds],
+    [authToken],
+  )
+
+  const createGroup = useCallback(
+    async (title: string, description: string) => {
+      if (!authToken) {
+        throw new Error('Требуется авторизация')
+      }
+
+      try {
+        const group = await createGroupRequest(authToken, title, description)
+
+        setGroups((current) => [group, ...current.filter((item) => item.id !== group.id)])
+        setJoinedGroups((current) =>
+          current.includes(group.id) ? current : [group.id, ...current],
+        )
+        setNotice(`Группа ${group.title} создана`)
+
+        return group
+      } catch (error) {
+        setNotice(`Группа не создана: ${getApiErrorMessage(error)}`)
+        throw error
+      }
+    },
+    [authToken],
+  )
+
+  const searchUsers = useCallback(
+    async (query: string) => {
+      if (!authToken) {
+        throw new Error('Требуется авторизация')
+      }
+
+      return searchUsersRequest(authToken, query)
+    },
+    [authToken],
+  )
+
+  const requestFriend = useCallback(
+    async (userId: string) => {
+      if (!authToken) {
+        throw new Error('Требуется авторизация')
+      }
+
+      await createFriendRequest(userId, authToken)
+      setNotice('Заявка в друзья отправлена')
+    },
+    [authToken],
   )
 
   const toggleGroup = useCallback(
     async (groupId: string) => {
+      if (!authToken) {
+        setNotice('Войдите в аккаунт, чтобы подписываться на группы')
+        return
+      }
+
       const willJoin = !joinedGroups.includes(groupId)
 
       setJoinedGroups((current) =>
@@ -205,20 +288,18 @@ export function useGameHubState() {
           : [...current, groupId],
       )
 
-      if (authToken) {
-        try {
-          const group = willJoin
-            ? await joinGroup(groupId, authToken)
-            : await leaveGroup(groupId, authToken)
+      try {
+        const group = willJoin
+          ? await joinGroup(groupId, authToken)
+          : await leaveGroup(groupId, authToken)
 
-          setGroups((current) => current.map((item) => (item.id === group.id ? group : item)))
-        } catch (error) {
-          setJoinedGroups((current) =>
-            willJoin ? current.filter((id) => id !== groupId) : [...current, groupId],
-          )
-          setNotice(`Действие с группой не выполнено: ${getApiErrorMessage(error)}`)
-          return
-        }
+        setGroups((current) => current.map((item) => (item.id === group.id ? group : item)))
+      } catch (error) {
+        setJoinedGroups((current) =>
+          willJoin ? current.filter((id) => id !== groupId) : [...current, groupId],
+        )
+        setNotice(`Действие с группой не выполнено: ${getApiErrorMessage(error)}`)
+        return
       }
 
       setNotice(willJoin ? 'Вы подписались на группу' : 'Подписка отменена')
@@ -242,10 +323,13 @@ export function useGameHubState() {
   return {
     addToLibrary,
     authUser: authSession?.user ?? null,
+    createProfilePost,
+    createGroup,
     friends,
     games,
     genres,
     groups,
+    isAuthChecking,
     isSyncing,
     joinedGroups,
     libraryGames,
@@ -257,11 +341,10 @@ export function useGameHubState() {
     recommendationGames,
     refreshGroup,
     register,
+    requestFriend,
+    searchUsers,
     setNotice,
     syncError,
     toggleGroup,
-    toggleWishlist,
-    wishlistGames,
-    wishlistSet,
   }
 }
