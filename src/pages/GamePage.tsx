@@ -94,12 +94,16 @@ export function GamePage({
 
       <section className="two-column">
         <article className="panel">
-          <SectionTitle
-            title="Отзывы"
-            meta={reviewsError ? 'локально' : `${reviews.length} публикаций`}
-          />
+          <SectionTitle title="Отзывы" />
           <div className="post-list">
-            {reviews.length > 0 ? (
+            {reviewsError ? (
+              <div className="empty-state compact">
+                <div>
+                  <h2>Отзывы недоступны</h2>
+                  <p>Проверьте соединение с сервером: {reviewsError}</p>
+                </div>
+              </div>
+            ) : reviews.length > 0 ? (
               reviews.map((review) => (
                 <Post
                   key={review.id}
@@ -118,7 +122,7 @@ export function GamePage({
           </div>
         </article>
         <article className="panel">
-          <SectionTitle title="Похожие игры" meta={String(similarGames.length)} />
+          <SectionTitle title="Похожие игры" />
           <div className="similar-game-list">
             {similarGames.map((item) => (
               <div key={item.id} className="similar-game-row">

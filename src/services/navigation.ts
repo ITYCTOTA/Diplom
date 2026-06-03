@@ -1,4 +1,4 @@
-import { viewIds } from '../data/gamehub'
+import { viewIds } from '../data/navigation'
 import type { RouteState, ViewId } from '../types'
 
 export function readRouteFromLocation(): RouteState {

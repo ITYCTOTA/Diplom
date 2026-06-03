@@ -7,10 +7,14 @@ import {
   createGroupPost,
   getGroup,
   getGroups,
+  getUserGroupMemberships,
   joinGroup,
   leaveGroup,
+  toggleGroupCommentLike,
   toggleGroupLike,
 } from './groups.service.js'
+import jwt from 'jsonwebtoken'
+import { env } from '../../config/env.js'
 
 export async function listGroupsController(_request: Request, response: Response) {
   const groups = await getGroups()
@@ -27,9 +31,27 @@ export async function createGroupController(request: AuthRequest, response: Resp
 }
 
 export async function getGroupController(request: Request, response: Response) {
-  const group = await getGroup(request.params.groupId)
+  const header = request.headers.authorization
+  let viewerId: string | undefined
+
+  if (header?.startsWith('Bearer ')) {
+    try {
+      const payload = jwt.verify(header.slice(7), env.jwtSecret) as { id?: string }
+      viewerId = payload.id
+    } catch {
+      viewerId = undefined
+    }
+  }
+
+  const group = await getGroup(request.params.groupId, viewerId)
 
   response.json({ group })
+}
+
+export async function getMyGroupMembershipsController(request: AuthRequest, response: Response) {
+  const groups = await getUserGroupMemberships(request.user!.id)
+
+  response.json({ groups })
 }
 
 export async function joinGroupController(request: AuthRequest, response: Response) {
@@ -61,6 +83,12 @@ export async function createGroupCommentController(request: AuthRequest, respons
 
 export async function toggleGroupLikeController(request: AuthRequest, response: Response) {
   const result = await toggleGroupLike(request.user!.id, request.params.postId)
+
+  response.json(result)
+}
+
+export async function toggleGroupCommentLikeController(request: AuthRequest, response: Response) {
+  const result = await toggleGroupCommentLike(request.user!.id, request.params.commentId)
 
   response.json(result)
 }

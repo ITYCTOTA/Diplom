@@ -1,10 +1,11 @@
-import { friends as fallbackFriends, games as fallbackGames, groups as fallbackGroups } from '../data/gamehub'
 import type {
   AuthUser,
   Friend,
+  FriendRequest,
   FriendSearchResult,
   Game,
   Group,
+  GroupMember,
   GroupPost,
   Review,
   UserPost,
@@ -55,7 +56,15 @@ type ApiGroupDto = {
   } | null
   membersCount: number
   postsCount: number
+  members?: ApiGroupMemberDto[]
   posts?: ApiGroupPostDto[]
+}
+
+type ApiGroupMemberDto = {
+  id: string
+  nickname: string
+  role: string
+  joinedAt: string
 }
 
 type ApiGroupPostDto = {
@@ -68,6 +77,7 @@ type ApiGroupPostDto = {
     nickname: string
   } | null
   likesCount: number
+  likedByMe?: boolean
   commentsCount: number
   comments?: ApiGroupCommentDto[]
 }
@@ -80,6 +90,8 @@ type ApiGroupCommentDto = {
     id: string
     nickname: string
   } | null
+  likesCount: number
+  likedByMe?: boolean
 }
 
 type ApiFriendDto = {
@@ -89,11 +101,23 @@ type ApiFriendDto = {
   friendsSince: string
 }
 
+type ApiFriendRequestDto = {
+  id: string
+  user: {
+    id: string
+    nickname: string
+    bio: string | null
+  }
+  direction: FriendRequest['direction']
+  createdAt: string
+}
+
 type ApiFriendSearchDto = {
   id: string
   nickname: string
   bio: string | null
   relation: FriendSearchResult['relation']
+  requestId?: string | null
 }
 
 type ApiRecommendationDto = {
@@ -212,31 +236,26 @@ function normalizeAuthUser(value: unknown): AuthUser | null {
     id: candidate.id,
     email: candidate.email,
     nickname: candidate.nickname,
-    walletBalanceCents:
-      typeof candidate.walletBalanceCents === 'number' ? candidate.walletBalanceCents : 0,
   }
 }
 
 function mapApiGame(dto: ApiGameDto, overrides: Partial<Game> = {}): Game {
-  const fallback = fallbackGames.find((game) => game.id === dto.slug || game.title === dto.title)
-  const genre = dto.genres[0] ?? fallback?.genre ?? 'Без жанра'
-  const tags = dto.tags.length > 0 ? dto.tags : fallback?.tags ?? []
+  const genre = dto.genres[0] ?? 'Без жанра'
 
   return {
     id: dto.slug,
     title: dto.title,
     genre,
-    mood: fallback?.mood ?? genre,
+    mood: genre,
     price: Math.round(dto.priceCents / 100),
-    discount: fallback?.discount,
     rating: dto.rating,
-    hours: fallback?.hours ?? 0,
-    tags,
+    hours: 0,
+    tags: dto.tags,
     summary: dto.description,
-    reason: fallback?.reason ?? 'Подборка сформирована по жанрам, тегам и активности игрока.',
-    activity: fallback?.activity ?? 'Данные синхронизированы с сервером',
+    reason: 'Подборка сформирована по жанрам и тегам.',
+    activity: '',
     palette: [dto.coverTone, dto.coverToneTwo],
-    coverUrl: dto.coverUrl ?? fallback?.coverUrl ?? null,
+    coverUrl: dto.coverUrl ?? null,
     ...overrides,
   }
 }
@@ -249,34 +268,46 @@ function mapApiGroupPost(dto: ApiGroupPostDto): GroupPost {
     text: dto.text,
     time: formatDateTime(dto.createdAt),
     likes: dto.likesCount,
+    likedByMe: dto.likedByMe,
     comments: dto.commentsCount,
     commentList: dto.comments?.map((comment) => ({
       id: comment.id,
       author: comment.author?.nickname ?? 'Участник',
       text: comment.text,
       time: formatDateTime(comment.createdAt),
+      likes: comment.likesCount,
+      likedByMe: comment.likedByMe,
     })),
   }
 }
 
+function mapApiGroupMember(dto: ApiGroupMemberDto): GroupMember {
+  return {
+    id: dto.id,
+    nickname: dto.nickname,
+    role: dto.role,
+    joinedAt: dto.joinedAt,
+  }
+}
+
 function mapApiGroup(dto: ApiGroupDto): Group {
-  const fallback = fallbackGroups.find((group) => group.id === dto.slug || group.title === dto.title)
   const createdAt = new Date(dto.createdAt)
-  const founded = Number.isNaN(createdAt.getTime()) ? fallback?.founded ?? '2026' : String(createdAt.getFullYear())
+  const founded = Number.isNaN(createdAt.getTime()) ? '2026' : String(createdAt.getFullYear())
 
   return {
     id: dto.slug,
     title: dto.title,
     members: formatCount(dto.membersCount),
-    topic: fallback?.topic ?? deriveTopic(dto.description),
+    memberList: dto.members?.map(mapApiGroupMember) ?? [],
+    topic: deriveTopic(dto.description),
     description: dto.description,
-    online: fallback?.online ?? formatCount(Math.max(1, Math.round(dto.membersCount / 3))),
+    online: formatCount(Math.max(1, Math.round(dto.membersCount / 3))),
     postsCount: formatCount(dto.postsCount),
     founded,
     creator: dto.creator,
-    gameIds: fallback?.gameIds ?? [],
+    gameIds: [],
     palette: [dto.coverTone, dto.coverToneTwo],
-    rules: fallback?.rules ?? ['Публикации должны относиться к теме группы'],
+    rules: ['Публикации должны относиться к теме группы'],
     posts: dto.posts?.map(mapApiGroupPost) ?? [],
     discussions: [],
   }
@@ -290,15 +321,15 @@ function mapApiUserPost(dto: ApiUserPostDto): UserPost {
   }
 }
 
-function mapApiFriend(dto: ApiFriendDto, index: number): Friend {
-  const fallback = fallbackFriends[index]
-
+function mapApiFriend(dto: ApiFriendDto): Friend {
   return {
     id: dto.id,
     name: dto.nickname,
     status: 'в друзьях',
-    game: fallback?.game ?? dto.bio ?? 'GameHub',
-    level: fallback?.level ?? 1,
+    game: dto.bio ?? '',
+    level: 1,
+    bio: dto.bio,
+    friendsSince: dto.friendsSince,
   }
 }
 
@@ -308,6 +339,18 @@ function mapApiFriendSearchResult(dto: ApiFriendSearchDto): FriendSearchResult {
     name: dto.nickname,
     bio: dto.bio,
     relation: dto.relation,
+    requestId: dto.requestId ?? null,
+  }
+}
+
+function mapApiFriendRequest(dto: ApiFriendRequestDto): FriendRequest {
+  return {
+    id: dto.id,
+    userId: dto.user.id,
+    name: dto.user.nickname,
+    bio: dto.user.bio,
+    direction: dto.direction,
+    createdAt: dto.createdAt,
   }
 }
 
@@ -359,6 +402,11 @@ export async function fetchGroups() {
   return response.groups.map((group) => mapApiGroup(group))
 }
 
+export async function fetchJoinedGroups(token: string) {
+  const response = await apiRequest<{ groups: string[] }>('/groups/memberships/me', { token })
+  return response.groups
+}
+
 export async function createGroup(token: string, title: string, description: string) {
   const response = await apiRequest<{ group: ApiGroupDto }>('/groups', {
     method: 'POST',
@@ -381,6 +429,34 @@ export async function createGroupPost(groupId: string, title: string, text: stri
   })
 
   return mapApiGroupPost(response.post)
+}
+
+export async function createGroupComment(postId: string, text: string) {
+  const response = await apiRequest<{ comment: ApiGroupCommentDto }>(`/groups/posts/${postId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify({ text }),
+  })
+
+  return {
+    id: response.comment.id,
+    author: response.comment.author?.nickname ?? 'Участник',
+    text: response.comment.text,
+    time: formatDateTime(response.comment.createdAt),
+    likes: response.comment.likesCount,
+    likedByMe: response.comment.likedByMe,
+  }
+}
+
+export async function toggleGroupPostLike(postId: string) {
+  return apiRequest<{ liked: boolean; likesCount: number }>(`/groups/posts/${postId}/like`, {
+    method: 'POST',
+  })
+}
+
+export async function toggleGroupCommentLike(commentId: string) {
+  return apiRequest<{ liked: boolean; likesCount: number }>(`/groups/comments/${commentId}/like`, {
+    method: 'POST',
+  })
 }
 
 export async function loginUser(email: string, password: string) {
@@ -435,8 +511,17 @@ export async function createProfilePost(text: string, token: string) {
 }
 
 export async function fetchFriends(token: string) {
-  const response = await apiRequest<{ friends: ApiFriendDto[] }>('/friends', { token })
-  return response.friends.map(mapApiFriend)
+  const response = await apiRequest<{
+    friends: ApiFriendDto[]
+    incomingRequests: ApiFriendRequestDto[]
+    outgoingRequests: ApiFriendRequestDto[]
+  }>('/friends', { token })
+
+  return {
+    friends: response.friends.map(mapApiFriend),
+    incomingRequests: response.incomingRequests.map(mapApiFriendRequest),
+    outgoingRequests: response.outgoingRequests.map(mapApiFriendRequest),
+  }
 }
 
 export async function searchUsers(token: string, query: string) {
@@ -450,6 +535,13 @@ export async function searchUsers(token: string, query: string) {
 
 export async function createFriendRequest(userId: string, token: string) {
   return apiRequest<{ friendRequest: unknown }>(`/friends/request/${userId}`, {
+    method: 'POST',
+    token,
+  })
+}
+
+export async function acceptFriendRequest(requestId: string, token: string) {
+  return apiRequest<{ status: 'accepted' }>(`/friends/accept/${requestId}`, {
     method: 'POST',
     token,
   })

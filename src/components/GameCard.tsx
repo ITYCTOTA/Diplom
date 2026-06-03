@@ -9,6 +9,8 @@ type GameCardProps = {
   isAuthenticated: boolean
   onAdd: (game: Game) => void
   onOpen: (game: Game) => void
+  artPriority?: 'auto' | 'high'
+  showPurchaseAction?: boolean
 }
 
 export function GameCard({
@@ -17,11 +19,13 @@ export function GameCard({
   isAuthenticated,
   onAdd,
   onOpen,
+  artPriority = 'auto',
+  showPurchaseAction = true,
 }: GameCardProps) {
   return (
     <article className="game-card" style={gameVars(game)}>
       <button type="button" className="game-open" onClick={() => onOpen(game)}>
-        <GameArt game={game} size="card" />
+        <GameArt game={game} size="card" priority={artPriority} />
       </button>
       <div className="game-card-body">
         <div className="card-head">
@@ -35,14 +39,16 @@ export function GameCard({
           <button type="button" className="secondary-button" onClick={() => onOpen(game)}>
             Подробнее
           </button>
-          <button
-            type="button"
-            className="primary-button"
-            disabled={inLibrary || !isAuthenticated}
-            onClick={() => onAdd(game)}
-          >
-            {inLibrary ? 'В библиотеке' : 'Купить'}
-          </button>
+          {showPurchaseAction ? (
+            <button
+              type="button"
+              className="primary-button"
+              disabled={inLibrary || !isAuthenticated}
+              onClick={() => onAdd(game)}
+            >
+              {inLibrary ? 'В библиотеке' : 'Купить'}
+            </button>
+          ) : null}
         </div>
       </div>
     </article>

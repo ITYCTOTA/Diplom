@@ -1,24 +1,43 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import gamehubBackground from './assets/gamehub-bg.png'
-import { CreateGroupModal } from './components/CreateGroupModal'
-import { FriendSearchModal } from './components/FriendSearchModal'
-import { PurchaseModal } from './components/PurchaseModal'
+import { WorkspaceLoader } from './components/WorkspaceLoader'
+import { WorkspaceError } from './components/WorkspaceError'
 import { Sidebar } from './components/Sidebar'
 import { Topbar } from './components/Topbar'
 import { useGameHubRoute } from './hooks/useGameHubRoute'
 import { useGameHubState } from './hooks/useGameHubState'
-import { AuthPage } from './pages/AuthPage'
-import { FriendsPage } from './pages/FriendsPage'
-import { GamePage } from './pages/GamePage'
-import { GroupPage } from './pages/GroupPage'
-import { GroupsPage } from './pages/GroupsPage'
 import { HomePage } from './pages/HomePage'
-import { LibraryPage } from './pages/LibraryPage'
-import { ProfilePage } from './pages/ProfilePage'
-import { RecommendationsPage } from './pages/RecommendationsPage'
-import { StorePage } from './pages/StorePage'
 import type { Game, ViewId } from './types'
 import './styles/App.css'
+
+const StorePage = lazy(() => import('./pages/StorePage').then((module) => ({ default: module.StorePage })))
+const GamePage = lazy(() => import('./pages/GamePage').then((module) => ({ default: module.GamePage })))
+const LibraryPage = lazy(() =>
+  import('./pages/LibraryPage').then((module) => ({ default: module.LibraryPage })),
+)
+const RecommendationsPage = lazy(() =>
+  import('./pages/RecommendationsPage').then((module) => ({ default: module.RecommendationsPage })),
+)
+const GroupsPage = lazy(() =>
+  import('./pages/GroupsPage').then((module) => ({ default: module.GroupsPage })),
+)
+const GroupPage = lazy(() => import('./pages/GroupPage').then((module) => ({ default: module.GroupPage })))
+const FriendsPage = lazy(() =>
+  import('./pages/FriendsPage').then((module) => ({ default: module.FriendsPage })),
+)
+const ProfilePage = lazy(() =>
+  import('./pages/ProfilePage').then((module) => ({ default: module.ProfilePage })),
+)
+const AuthPage = lazy(() => import('./pages/AuthPage').then((module) => ({ default: module.AuthPage })))
+const PurchaseModal = lazy(() =>
+  import('./components/PurchaseModal').then((module) => ({ default: module.PurchaseModal })),
+)
+const FriendSearchModal = lazy(() =>
+  import('./components/FriendSearchModal').then((module) => ({ default: module.FriendSearchModal })),
+)
+const CreateGroupModal = lazy(() =>
+  import('./components/CreateGroupModal').then((module) => ({ default: module.CreateGroupModal })),
+)
 
 type SearchScope = 'games' | 'friends' | 'groups'
 
@@ -42,10 +61,99 @@ const emptySearchState: Record<SearchScope, string> = {
   groups: '',
 }
 
+type WorkspaceAction = 'reload' | 'auth' | 'home'
+
+type WorkspaceErrorState = {
+  code: string
+  title: string
+  message: string
+  actionLabel: string
+  action: WorkspaceAction
+}
+
+function buildWorkspaceError(message: string): WorkspaceErrorState {
+  const normalized = message.toLocaleLowerCase('ru-RU')
+  const status = message.match(/\b(301|302|307|308|401|403|404|409|500|502|503)\b/)?.[1]
+
+  if (
+    normalized.includes('failed to fetch') ||
+    normalized.includes('networkerror') ||
+    normalized.includes('network') ||
+    normalized.includes('fetch failed')
+  ) {
+    return {
+      code: '503',
+      title: 'Сервер недоступен',
+      message: 'Не удалось подключиться к серверу.',
+      actionLabel: 'Повторить',
+      action: 'reload',
+    }
+  }
+
+  if (status === '401' || normalized.includes('авторизац') || normalized.includes('token')) {
+    return {
+      code: '401',
+      title: 'Требуется вход',
+      message: 'Сессия не подтверждена. Войдите в аккаунт заново.',
+      actionLabel: 'Открыть вход',
+      action: 'auth',
+    }
+  }
+
+  if (status === '403') {
+    return {
+      code: '403',
+      title: 'Нет доступа',
+      message,
+      actionLabel: 'Вернуться на главную',
+      action: 'home',
+    }
+  }
+
+  if (status === '404' || normalized.includes('не найден')) {
+    return {
+      code: '404',
+      title: 'Ресурс не найден',
+      message,
+      actionLabel: 'Вернуться на главную',
+      action: 'home',
+    }
+  }
+
+  if (status === '409') {
+    return {
+      code: '409',
+      title: 'Конфликт данных',
+      message,
+      actionLabel: 'Повторить',
+      action: 'reload',
+    }
+  }
+
+  if (status === '500' || status === '502' || status === '503') {
+    return {
+      code: status,
+      title: 'Сервер недоступен',
+      message: 'На стороне backend возникла ошибка. Попробуйте еще раз позже.',
+      actionLabel: 'Повторить',
+      action: 'reload',
+    }
+  }
+
+  return {
+    code: status ?? 'ERROR',
+    title: 'Не удалось загрузить данные',
+    message,
+    actionLabel: 'Повторить',
+    action: 'reload',
+  }
+}
+
 function App() {
   const { activeView, selectedBackView, selectedGameId, selectedGroupId, navigate } = useGameHubRoute()
   const {
     addToLibrary,
+    acceptFriendRequest,
     authUser,
     createProfilePost,
     createGroup,
@@ -53,6 +161,7 @@ function App() {
     games,
     genres,
     groups,
+    incomingFriendRequests,
     isAuthChecking,
     isSyncing,
     joinedGroups,
@@ -61,6 +170,7 @@ function App() {
     login,
     logout,
     notice,
+    outgoingFriendRequests,
     profile,
     recommendationGames,
     register,
@@ -78,11 +188,11 @@ function App() {
   const [isFriendSearchOpen, setIsFriendSearchOpen] = useState(false)
   const [isCreateGroupOpen, setIsCreateGroupOpen] = useState(false)
 
-  const selectedGame = games.find((game) => game.id === selectedGameId) ?? games[0]
-  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0]
+  const selectedGame = games.find((game) => game.id === selectedGameId) ?? games[0] ?? null
+  const selectedGroup = groups.find((group) => group.id === selectedGroupId) ?? groups[0] ?? null
   const recommendations =
     recommendationGames.length > 0
-      ? recommendationGames
+      ? recommendationGames.filter((game) => !librarySet.has(game.id))
       : games.filter((game) => !librarySet.has(game.id))
   const searchScope = searchScopeByView[activeView] ?? null
   const gameSearchQuery = searchTerms.games.trim().toLocaleLowerCase('ru-RU')
@@ -94,6 +204,12 @@ function App() {
       ? `Последняя синхронизация не выполнена: ${syncError}`
       : notice
   const profileGuestView = activeView === 'profile' && !authUser
+  const workspaceError = !isSyncing && syncError ? buildWorkspaceError(syncError) : null
+  const isAwaitingSelectedEntity =
+    (activeView === 'game' && !selectedGame && (isSyncing || games.length === 0)) ||
+    (activeView === 'group' && !selectedGroup && (isSyncing || groups.length === 0))
+  const workspaceLoading = !workspaceError && (isAwaitingSelectedEntity || (isSyncing && games.length === 0))
+  const topbarNotice = profileGuestView || workspaceError ? '' : noticeText
 
   useEffect(() => {
     setIsFriendSearchOpen(false)
@@ -233,6 +349,15 @@ function App() {
           />
         )
       case 'game':
+        if (!selectedGame) {
+          return (
+            <section className="empty-state">
+              <h2>Игра не найдена</h2>
+              <p>Карточка станет доступна после загрузки каталога или при корректном адресе.</p>
+            </section>
+          )
+        }
+
         return (
           <GamePage
             game={selectedGame}
@@ -270,6 +395,7 @@ function App() {
             groups={filteredGroups}
             joinedGroups={joinedGroups}
             isAuthenticated={Boolean(authUser)}
+            currentUserId={authUser?.id}
             onOpenGroup={(group) => openGroup(group.id)}
             onToggleGroup={toggleGroup}
             onOpenCreateGroup={openCreateGroup}
@@ -277,6 +403,15 @@ function App() {
           />
         )
       case 'group':
+        if (!selectedGroup) {
+          return (
+            <section className="empty-state">
+              <h2>Группа не найдена</h2>
+              <p>Страница группы станет доступна после загрузки списка групп или при корректном адресе.</p>
+            </section>
+          )
+        }
+
         return (
           <GroupPage
             currentUserId={authUser?.id}
@@ -288,8 +423,11 @@ function App() {
         return (
           <FriendsPage
             friends={filteredFriends}
+            incomingRequests={incomingFriendRequests}
             isAuthenticated={Boolean(authUser)}
+            onAcceptRequest={acceptFriendRequest}
             onOpenSearch={openFriendSearch}
+            outgoingRequests={outgoingFriendRequests}
             searchQuery={searchTerms.friends}
           />
         )
@@ -340,29 +478,72 @@ function App() {
         onNavigate={navigate}
       />
       <main className="workspace">
-        <Topbar activeView={activeView} notice={profileGuestView ? '' : noticeText} search={searchConfig} />
-        {page}
+        <Topbar
+          activeView={activeView}
+          notice={topbarNotice}
+          search={workspaceError ? undefined : searchConfig}
+          headerOverride={
+            workspaceError
+              ? {
+                  eyebrow: 'Ошибка',
+                  title: 'Сбой подключения',
+                }
+              : undefined
+          }
+        />
+        {workspaceError ? (
+          <WorkspaceError
+            code={workspaceError.code}
+            title={workspaceError.title}
+            message={workspaceError.message}
+            actionLabel={workspaceError.actionLabel}
+            onAction={() => {
+              if (workspaceError.action === 'auth') {
+                navigate('auth')
+                return
+              }
+
+              if (workspaceError.action === 'home') {
+                navigate('home')
+                return
+              }
+
+              window.location.reload()
+            }}
+          />
+        ) : workspaceLoading ? (
+          <WorkspaceLoader />
+        ) : (
+          <Suspense fallback={<WorkspaceLoader />}>{page}</Suspense>
+        )}
       </main>
       {purchaseGame && (
-        <PurchaseModal
-          game={purchaseGame}
-          isPending={isPurchasePending}
-          onCancel={() => setPurchaseGame(null)}
-          onConfirm={confirmPurchase}
-        />
+        <Suspense fallback={null}>
+          <PurchaseModal
+            game={purchaseGame}
+            isPending={isPurchasePending}
+            onCancel={() => setPurchaseGame(null)}
+            onConfirm={confirmPurchase}
+          />
+        </Suspense>
       )}
       {isFriendSearchOpen && authUser && (
-        <FriendSearchModal
-          onClose={() => setIsFriendSearchOpen(false)}
-          onRequestFriend={requestFriend}
-          onSearchUsers={searchUsers}
-        />
+        <Suspense fallback={null}>
+          <FriendSearchModal
+            onAcceptFriend={acceptFriendRequest}
+            onClose={() => setIsFriendSearchOpen(false)}
+            onRequestFriend={requestFriend}
+            onSearchUsers={searchUsers}
+          />
+        </Suspense>
       )}
       {isCreateGroupOpen && authUser && (
-        <CreateGroupModal
-          onClose={() => setIsCreateGroupOpen(false)}
-          onCreateGroup={createGroupFromModal}
-        />
+        <Suspense fallback={null}>
+          <CreateGroupModal
+            onClose={() => setIsCreateGroupOpen(false)}
+            onCreateGroup={createGroupFromModal}
+          />
+        </Suspense>
       )}
     </div>
   )

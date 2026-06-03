@@ -24,6 +24,7 @@ type GroupPostRow = {
   author_id: string | null
   author_nickname: string | null
   likes_count: string
+  liked_by_me: boolean
   comments_count: string
 }
 
@@ -34,6 +35,15 @@ type GroupCommentRow = {
   created_at: string
   author_id: string | null
   author_nickname: string | null
+  likes_count: string
+  liked_by_me: boolean
+}
+
+type GroupMemberRow = {
+  id: string
+  nickname: string | null
+  role: string
+  joined_at: string
 }
 
 const groupPalettes: Array<[string, string]> = [
@@ -88,6 +98,8 @@ function toGroupComment(row: GroupCommentRow) {
     id: row.id,
     text: row.text,
     createdAt: row.created_at,
+    likesCount: Number(row.likes_count),
+    likedByMe: row.liked_by_me,
     author: row.author_id
       ? {
           id: row.author_id,
@@ -97,12 +109,22 @@ function toGroupComment(row: GroupCommentRow) {
   }
 }
 
+function toGroupMember(row: GroupMemberRow) {
+  return {
+    id: row.id,
+    nickname: row.nickname ?? 'Участник',
+    role: row.role,
+    joinedAt: row.joined_at,
+  }
+}
+
 function toGroupPost(row: GroupPostRow, comments: ReturnType<typeof toGroupComment>[] = []) {
   return {
     id: row.id,
     title: row.title,
     text: row.text,
     createdAt: row.created_at,
+    likedByMe: row.liked_by_me,
     author: row.author_id
       ? {
           id: row.author_id,
@@ -153,7 +175,22 @@ export async function getGroups() {
   return result.rows.map(toGroup)
 }
 
-export async function getGroup(idOrSlug: string) {
+export async function getUserGroupMemberships(userId: string) {
+  const result = await query<{ slug: string }>(
+    `
+      SELECT g.slug
+      FROM group_members gm
+      JOIN groups g ON g.id = gm.group_id
+      WHERE gm.user_id = $1
+      ORDER BY gm.joined_at DESC
+    `,
+    [userId],
+  )
+
+  return result.rows.map((row) => row.slug)
+}
+
+export async function getGroup(idOrSlug: string, viewerId?: string) {
   const groupId = await resolveGroupId(idOrSlug)
   const groupResult = await query<GroupRow>(
     `
@@ -191,13 +228,18 @@ export async function getGroup(idOrSlug: string) {
         u.id AS author_id,
         u.nickname AS author_nickname,
         (SELECT COUNT(*) FROM group_likes gl WHERE gl.post_id = gp.id) AS likes_count,
+        EXISTS (
+          SELECT 1
+          FROM group_likes gl
+          WHERE gl.post_id = gp.id AND gl.user_id = $2
+        ) AS liked_by_me,
         (SELECT COUNT(*) FROM group_comments gc WHERE gc.post_id = gp.id) AS comments_count
       FROM group_posts gp
       LEFT JOIN users u ON u.id = gp.author_id
       WHERE gp.group_id = $1
       ORDER BY gp.created_at DESC
     `,
-    [groupId],
+    [groupId, viewerId ?? null],
   )
   const commentsResult = await query<GroupCommentRow>(
     `
@@ -207,14 +249,20 @@ export async function getGroup(idOrSlug: string) {
         gc.text,
         gc.created_at,
         u.id AS author_id,
-        u.nickname AS author_nickname
+        u.nickname AS author_nickname,
+        (SELECT COUNT(*) FROM group_comment_likes gcl WHERE gcl.comment_id = gc.id) AS likes_count,
+        EXISTS (
+          SELECT 1
+          FROM group_comment_likes gcl
+          WHERE gcl.comment_id = gc.id AND gcl.user_id = $2
+        ) AS liked_by_me
       FROM group_comments gc
       JOIN group_posts gp ON gp.id = gc.post_id
       LEFT JOIN users u ON u.id = gc.author_id
       WHERE gp.group_id = $1
       ORDER BY gc.created_at ASC
     `,
-    [groupId],
+    [groupId, viewerId ?? null],
   )
   const commentsByPost = new Map<string, ReturnType<typeof toGroupComment>[]>()
 
@@ -224,8 +272,32 @@ export async function getGroup(idOrSlug: string) {
     commentsByPost.set(comment.post_id, postComments)
   }
 
+  const membersResult = await query<GroupMemberRow>(
+    `
+      SELECT
+        u.id,
+        u.nickname,
+        gm.role,
+        gm.joined_at AS joined_at
+      FROM group_members gm
+      JOIN users u ON u.id = gm.user_id
+      WHERE gm.group_id = $1
+      ORDER BY
+        CASE gm.role
+          WHEN 'creator' THEN 0
+          WHEN 'admin' THEN 1
+          WHEN 'moderator' THEN 2
+          ELSE 3
+        END,
+        gm.joined_at ASC,
+        u.nickname ASC
+    `,
+    [groupId],
+  )
+
   return {
     ...toGroup(group),
+    members: membersResult.rows.map(toGroupMember),
     posts: postsResult.rows.map((post) => toGroupPost(post, commentsByPost.get(post.id) ?? [])),
   }
 }
@@ -242,7 +314,7 @@ export async function joinGroup(userId: string, idOrSlug: string) {
     [groupId, userId],
   )
 
-  return getGroup(groupId)
+  return getGroup(groupId, userId)
 }
 
 export async function leaveGroup(userId: string, idOrSlug: string) {
@@ -250,7 +322,7 @@ export async function leaveGroup(userId: string, idOrSlug: string) {
 
   await query('DELETE FROM group_members WHERE group_id = $1 AND user_id = $2', [groupId, userId])
 
-  return getGroup(groupId)
+  return getGroup(groupId, userId)
 }
 
 export async function createGroup(userId: string, title: string, description: string) {
@@ -284,7 +356,7 @@ export async function createGroup(userId: string, title: string, description: st
     )
     await client.query('COMMIT')
 
-    return getGroup(groupId)
+    return getGroup(groupId, userId)
   } catch (error) {
     await client.query('ROLLBACK')
     throw error
@@ -326,16 +398,24 @@ export async function createGroupPost(userId: string, idOrSlug: string, title: s
 }
 
 export async function createGroupComment(userId: string, postId: string, text: string) {
-  const result = await query(
+  const result = await query<GroupCommentRow>(
     `
       INSERT INTO group_comments (post_id, author_id, text)
       VALUES ($1, $2, $3)
-      RETURNING id, post_id, author_id, text, created_at
+      RETURNING
+        id,
+        post_id,
+        author_id,
+        text,
+        created_at,
+        (SELECT nickname FROM users WHERE id = $2) AS author_nickname,
+        '0' AS likes_count,
+        false AS liked_by_me
     `,
     [postId, userId, text],
   )
 
-  return result.rows[0]
+  return toGroupComment(result.rows[0])
 }
 
 export async function toggleGroupLike(userId: string, postId: string) {
@@ -346,9 +426,50 @@ export async function toggleGroupLike(userId: string, postId: string) {
 
   if ((existing.rowCount ?? 0) > 0) {
     await query('DELETE FROM group_likes WHERE post_id = $1 AND user_id = $2', [postId, userId])
-    return { liked: false }
+    const countResult = await query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM group_likes WHERE post_id = $1',
+      [postId],
+    )
+
+    return { liked: false, likesCount: Number(countResult.rows[0]?.count ?? '0') }
   }
 
   await query('INSERT INTO group_likes (post_id, user_id) VALUES ($1, $2)', [postId, userId])
-  return { liked: true }
+  const countResult = await query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM group_likes WHERE post_id = $1',
+    [postId],
+  )
+
+  return { liked: true, likesCount: Number(countResult.rows[0]?.count ?? '0') }
+}
+
+export async function toggleGroupCommentLike(userId: string, commentId: string) {
+  const existing = await query(
+    'SELECT 1 FROM group_comment_likes WHERE comment_id = $1 AND user_id = $2',
+    [commentId, userId],
+  )
+
+  if ((existing.rowCount ?? 0) > 0) {
+    await query('DELETE FROM group_comment_likes WHERE comment_id = $1 AND user_id = $2', [
+      commentId,
+      userId,
+    ])
+    const countResult = await query<{ count: string }>(
+      'SELECT COUNT(*)::text AS count FROM group_comment_likes WHERE comment_id = $1',
+      [commentId],
+    )
+
+    return { liked: false, likesCount: Number(countResult.rows[0]?.count ?? '0') }
+  }
+
+  await query('INSERT INTO group_comment_likes (comment_id, user_id) VALUES ($1, $2)', [
+    commentId,
+    userId,
+  ])
+  const countResult = await query<{ count: string }>(
+    'SELECT COUNT(*)::text AS count FROM group_comment_likes WHERE comment_id = $1',
+    [commentId],
+  )
+
+  return { liked: true, likesCount: Number(countResult.rows[0]?.count ?? '0') }
 }

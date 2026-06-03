@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { games as fallbackGames, groups as fallbackGroups } from '../data/gamehub'
 import {
+  acceptFriendRequest as acceptFriendRequestApi,
   createFriendRequest,
   createGroup as createGroupRequest,
   createPurchase,
@@ -9,6 +9,7 @@ import {
   fetchCurrentUser,
   fetchGames,
   fetchGroups,
+  fetchJoinedGroups,
   fetchLibrary,
   fetchProfile,
   fetchRecommendations,
@@ -22,12 +23,14 @@ import {
   storeSession,
   type AuthSession,
 } from '../services/gameHubApi'
-import type { Friend, Game, Group, UserProfile } from '../types'
+import type { Friend, FriendRequest, Game, Group, UserProfile } from '../types'
 
 export function useGameHubState() {
-  const [games, setGames] = useState<Game[]>(fallbackGames)
-  const [groups, setGroups] = useState<Group[]>(fallbackGroups)
+  const [games, setGames] = useState<Game[]>([])
+  const [groups, setGroups] = useState<Group[]>([])
   const [friends, setFriends] = useState<Friend[]>([])
+  const [incomingFriendRequests, setIncomingFriendRequests] = useState<FriendRequest[]>([])
+  const [outgoingFriendRequests, setOutgoingFriendRequests] = useState<FriendRequest[]>([])
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [recommendationGames, setRecommendationGames] = useState<Game[]>([])
   const [authSession, setAuthSession] = useState<AuthSession | null>(() => readStoredSession())
@@ -49,21 +52,45 @@ export function useGameHubState() {
     [games, librarySet],
   )
 
+  const syncFriendState = useCallback(async (token: string) => {
+    const friendState = await fetchFriends(token)
+    setFriends(friendState.friends)
+    setIncomingFriendRequests(friendState.incomingRequests)
+    setOutgoingFriendRequests(friendState.outgoingRequests)
+  }, [])
+
   useEffect(() => {
     let isActive = true
 
     async function syncPublicData() {
       setIsSyncing(true)
 
+      const groupsPromise = fetchGroups()
+      void groupsPromise
+        .then((apiGroups) => {
+          if (!isActive) {
+            return
+          }
+
+          setGroups(apiGroups)
+        })
+        .catch((error) => {
+          if (!isActive) {
+            return
+          }
+
+          setGroups([])
+          setNotice(`Не удалось обновить группы: ${getApiErrorMessage(error)}`)
+        })
+
       try {
-        const [apiGames, apiGroups] = await Promise.all([fetchGames(), fetchGroups()])
+        const apiGames = await fetchGames()
 
         if (!isActive) {
           return
         }
 
-        setGames(apiGames.length > 0 ? apiGames : fallbackGames)
-        setGroups(apiGroups.length > 0 ? apiGroups : fallbackGroups)
+        setGames(apiGames)
         setSyncError(null)
       } catch (error) {
         if (!isActive) {
@@ -72,7 +99,12 @@ export function useGameHubState() {
 
         const message = getApiErrorMessage(error)
         setSyncError(message)
-        setNotice(`API недоступен, показаны локальные данные: ${message}`)
+        setGames([])
+        setGroups([])
+        setRecommendationGames([])
+        setLibraryIds([])
+        setJoinedGroups([])
+        setNotice(`API недоступен: ${message}`)
       } finally {
         if (isActive) {
           setIsSyncing(false)
@@ -98,12 +130,14 @@ export function useGameHubState() {
       setIsAuthChecking(true)
 
       try {
-        const [apiUser, apiLibrary, apiRecommendations, apiProfile, apiFriends] = await Promise.all([
+        const [apiUser, apiLibrary, apiRecommendations, apiProfile, apiFriendState, apiJoinedGroups] =
+          await Promise.all([
           fetchCurrentUser(token),
           fetchLibrary(token),
           fetchRecommendations(token),
           fetchProfile(token),
           fetchFriends(token),
+          fetchJoinedGroups(token),
         ])
 
         if (!isActive) {
@@ -114,9 +148,12 @@ export function useGameHubState() {
         storeSession(verifiedSession)
         setAuthSession(verifiedSession)
         setLibraryIds(apiLibrary.map((game) => game.id))
+        setJoinedGroups(apiJoinedGroups)
         setRecommendationGames(apiRecommendations)
         setProfile(apiProfile)
-        setFriends(apiFriends)
+        setFriends(apiFriendState.friends)
+        setIncomingFriendRequests(apiFriendState.incomingRequests)
+        setOutgoingFriendRequests(apiFriendState.outgoingRequests)
         setSyncError(null)
       } catch (error) {
         if (!isActive) {
@@ -124,13 +161,26 @@ export function useGameHubState() {
         }
 
         const message = getApiErrorMessage(error)
-        storeSession(null)
-        setAuthSession(null)
-        setProfile(null)
-        setFriends([])
-        setRecommendationGames([])
+        const isAuthFailure =
+          message.includes('401') ||
+          message.toLocaleLowerCase('ru-RU').includes('авторизац') ||
+          message.toLocaleLowerCase('ru-RU').includes('недействительный токен')
+
+        if (isAuthFailure) {
+          storeSession(null)
+          setAuthSession(null)
+          setProfile(null)
+          setFriends([])
+          setIncomingFriendRequests([])
+          setOutgoingFriendRequests([])
+          setRecommendationGames([])
+          setLibraryIds([])
+          setJoinedGroups([])
+          setNotice(`Сессия не подтверждена: ${message}`)
+        } else {
+          setNotice(`Не удалось проверить личные данные: ${message}`)
+        }
         setSyncError(message)
-        setNotice(`Сессия не подтверждена: ${message}`)
       } finally {
         if (isActive) {
           setIsAuthChecking(false)
@@ -164,6 +214,8 @@ export function useGameHubState() {
     setAuthSession(null)
     setProfile(null)
     setFriends([])
+    setIncomingFriendRequests([])
+    setOutgoingFriendRequests([])
     setRecommendationGames([])
     setLibraryIds([])
     setJoinedGroups([])
@@ -268,9 +320,23 @@ export function useGameHubState() {
       }
 
       await createFriendRequest(userId, authToken)
+      await syncFriendState(authToken)
       setNotice('Заявка в друзья отправлена')
     },
-    [authToken],
+    [authToken, syncFriendState],
+  )
+
+  const acceptFriendRequest = useCallback(
+    async (requestId: string) => {
+      if (!authToken) {
+        throw new Error('РўСЂРµР±СѓРµС‚СЃСЏ Р°РІС‚РѕСЂРёР·Р°С†РёСЏ')
+      }
+
+      await acceptFriendRequestApi(requestId, authToken)
+      await syncFriendState(authToken)
+      setNotice('Р—Р°СЏРІРєР° РїСЂРёРЅСЏС‚Р°')
+    },
+    [authToken, syncFriendState],
   )
 
   const toggleGroup = useCallback(
@@ -322,6 +388,7 @@ export function useGameHubState() {
 
   return {
     addToLibrary,
+    acceptFriendRequest,
     authUser: authSession?.user ?? null,
     createProfilePost,
     createGroup,
@@ -329,6 +396,7 @@ export function useGameHubState() {
     games,
     genres,
     groups,
+    incomingFriendRequests,
     isAuthChecking,
     isSyncing,
     joinedGroups,
@@ -337,6 +405,7 @@ export function useGameHubState() {
     login,
     logout,
     notice,
+    outgoingFriendRequests,
     profile,
     recommendationGames,
     refreshGroup,

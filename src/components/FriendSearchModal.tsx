@@ -5,6 +5,7 @@ import type { FriendSearchResult } from '../types'
 type FriendSearchModalProps = {
   onClose: () => void
   onRequestFriend: (userId: string) => Promise<void>
+  onAcceptFriend: (requestId: string) => Promise<void>
   onSearchUsers: (query: string) => Promise<FriendSearchResult[]>
 }
 
@@ -12,24 +13,39 @@ const relationLabel: Record<FriendSearchResult['relation'], string> = {
   available: 'Можно добавить',
   friend: 'Уже в друзьях',
   request_sent: 'Заявка отправлена',
-  request_received: 'Они ждут ответа',
+  request_received: 'Есть входящая заявка',
 }
 
 const actionLabel: Record<FriendSearchResult['relation'], string> = {
   available: 'Добавить',
   friend: 'В друзьях',
   request_sent: 'Отправлено',
-  request_received: 'Без действия',
+  request_received: 'Принять',
 }
 
-export function FriendSearchModal({ onClose, onRequestFriend, onSearchUsers }: FriendSearchModalProps) {
+export function FriendSearchModal({
+  onClose,
+  onRequestFriend,
+  onAcceptFriend,
+  onSearchUsers,
+}: FriendSearchModalProps) {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FriendSearchResult[]>([])
   const [error, setError] = useState('')
   const [isSearching, setIsSearching] = useState(false)
-  const [activeRequestId, setActiveRequestId] = useState<string | null>(null)
+  const [activeUserId, setActiveUserId] = useState<string | null>(null)
 
   const normalizedQuery = useMemo(() => query.trim(), [query])
+
+  const refreshResults = async () => {
+    if (normalizedQuery.length === 0) {
+      setResults([])
+      return
+    }
+
+    const users = await onSearchUsers(normalizedQuery)
+    setResults(users)
+  }
 
   const runSearch = async (event?: FormEvent<HTMLFormElement>) => {
     event?.preventDefault()
@@ -37,8 +53,7 @@ export function FriendSearchModal({ onClose, onRequestFriend, onSearchUsers }: F
     setIsSearching(true)
 
     try {
-      const users = await onSearchUsers(normalizedQuery)
-      setResults(users)
+      await refreshResults()
     } catch (searchError) {
       setError(searchError instanceof Error ? searchError.message : 'Не удалось найти пользователей')
       setResults([])
@@ -47,27 +62,33 @@ export function FriendSearchModal({ onClose, onRequestFriend, onSearchUsers }: F
     }
   }
 
-  const sendRequest = async (userId: string) => {
+  const handleAction = async (user: FriendSearchResult) => {
     setError('')
-    setActiveRequestId(userId)
+    setActiveUserId(user.id)
 
     try {
-      await onRequestFriend(userId)
-      if (normalizedQuery.length > 0) {
-        const users = await onSearchUsers(normalizedQuery)
-        setResults(users)
+      if (user.relation === 'available') {
+        await onRequestFriend(user.id)
+      } else if (user.relation === 'request_received') {
+        if (!user.requestId) {
+          throw new Error('Не удалось определить входящую заявку')
+        }
+
+        await onAcceptFriend(user.requestId)
       }
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Не удалось отправить заявку')
+
+      await refreshResults()
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : 'Не удалось выполнить действие')
     } finally {
-      setActiveRequestId(null)
+      setActiveUserId(null)
     }
   }
 
   return (
     <ModalShell
       title="Найти друзей"
-      description="Введите имя, почту или короткое описание, чтобы найти пользователей."
+      description="Введите имя, почту или описание пользователя, чтобы отправить заявку или принять входящую."
       onClose={onClose}
       widthClass="wide"
     >
@@ -93,26 +114,31 @@ export function FriendSearchModal({ onClose, onRequestFriend, onSearchUsers }: F
 
       {results.length > 0 ? (
         <div className="friend-search-list">
-          {results.map((user) => (
-            <article className="friend-search-item" key={user.id}>
-              <div className="friend-avatar" aria-hidden="true">
-                {user.name.slice(0, 1)}
-              </div>
-              <div>
-                <span className="eyebrow">{relationLabel[user.relation]}</span>
-                <h3>{user.name}</h3>
-                <p>{user.bio ?? 'Без описания'}</p>
-              </div>
-              <button
-                type="button"
-                className="secondary-button"
-                disabled={user.relation !== 'available' || activeRequestId === user.id}
-                onClick={() => sendRequest(user.id)}
-              >
-                {activeRequestId === user.id ? 'Отправляем...' : actionLabel[user.relation]}
-              </button>
-            </article>
-          ))}
+          {results.map((user) => {
+            const isDisabled = user.relation === 'friend' || user.relation === 'request_sent'
+            const isPending = activeUserId === user.id
+
+            return (
+              <article className="friend-search-item" key={user.id}>
+                <div className="friend-avatar" aria-hidden="true">
+                  {user.name.slice(0, 1)}
+                </div>
+                <div>
+                  <span className="eyebrow">{relationLabel[user.relation]}</span>
+                  <h3>{user.name}</h3>
+                  <p>{user.bio ?? 'Без описания'}</p>
+                </div>
+                <button
+                  type="button"
+                  className={user.relation === 'request_received' ? 'primary-button' : 'secondary-button'}
+                  disabled={isDisabled || isPending}
+                  onClick={() => void handleAction(user)}
+                >
+                  {isPending ? 'Обрабатываем...' : actionLabel[user.relation]}
+                </button>
+              </article>
+            )
+          })}
         </div>
       ) : normalizedQuery.length > 0 && !isSearching ? (
         <section className="empty-state compact">

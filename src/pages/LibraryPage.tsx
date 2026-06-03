@@ -1,4 +1,4 @@
-import { GameArt } from '../components/GameArt'
+import { GameCard } from '../components/GameCard'
 import type { Game } from '../types'
 
 export function LibraryPage({
@@ -39,22 +39,19 @@ export function LibraryPage({
   }
 
   return (
-    <div className="library-list">
-      {games.map((game) => (
-        <article className="library-item panel" key={game.id}>
-          <GameArt game={game} size="medium" />
-          <div>
-            <span className="eyebrow">{game.genre}</span>
-            <h2>{game.title}</h2>
-            <p>{game.activity}</p>
-          </div>
-          <div className="library-action">
-            <button type="button" className="secondary-button" onClick={() => onOpen(game)}>
-              Подробнее
-            </button>
-          </div>
-        </article>
+    <section className="game-grid">
+      {games.map((game, index) => (
+        <GameCard
+          key={game.id}
+          artPriority={index < 4 ? 'high' : 'auto'}
+          game={game}
+          inLibrary
+          isAuthenticated={isAuthenticated}
+          onAdd={() => undefined}
+          onOpen={onOpen}
+          showPurchaseAction={false}
+        />
       ))}
-    </div>
+    </section>
   )
 }

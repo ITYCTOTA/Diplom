@@ -40,7 +40,6 @@ export function ProfilePage({ profile, onCreatePost }: ProfilePageProps) {
     )
   }
 
-  const heat = Array.from({ length: 35 }, (_, index) => (index * 17) % 5)
   const createdYear = new Date(profile.createdAt).getFullYear()
   const monthlyHours = Math.round(profile.stats.totalMinutes / 60)
   const visiblePosts = profile.posts.slice(0, 6)
@@ -141,14 +140,6 @@ export function ProfilePage({ profile, onCreatePost }: ProfilePageProps) {
         )}
       </section>
 
-      <section className="panel">
-        <SectionTitle title="Активность" meta="5 недель" />
-        <div className="heatmap" aria-label="Игровая активность">
-          {heat.map((level, index) => (
-            <span key={`${index}-${level}`} data-level={level} />
-          ))}
-        </div>
-      </section>
     </div>
   )
 }

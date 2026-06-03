@@ -1,5 +1,4 @@
-import { moneyLabel } from '../services/format'
-import { navItems } from '../data/gamehub'
+import { navItems } from '../data/navigation'
 import type { AuthUser, ViewId } from '../types'
 
 export function Sidebar({
@@ -39,16 +38,15 @@ export function Sidebar({
 
       <div className="sidebar-footer">
         {authUser ? (
-          <div className="wallet-card">
-            <span className="eyebrow">Кошелек</span>
-            <strong>{moneyLabel(authUser.walletBalanceCents)}</strong>
-            <p>{authUser.nickname}</p>
+          <div className="account-card">
+            <span className="eyebrow">Аккаунт</span>
+            <strong>{authUser.nickname}</strong>
           </div>
         ) : (
-          <div className="wallet-card guest">
+          <div className="account-card guest">
             <span className="eyebrow">Аккаунт</span>
             <strong>Гость</strong>
-            <p>Войдите, чтобы увидеть баланс и покупки.</p>
+            <p>Войдите, чтобы продолжить.</p>
           </div>
         )}
 

@@ -95,7 +95,7 @@ export function AuthPage({
               required
               type="email"
               value={email}
-              placeholder="ityctota@example.com"
+              placeholder="example@example.com"
               onChange={(event) => setEmail(event.target.value)}
             />
           </label>
@@ -106,7 +106,7 @@ export function AuthPage({
                 required
                 type="text"
                 value={nickname}
-                placeholder="ITYCTOTA"
+                placeholder="Введите никнейм"
                 onChange={(event) => setNickname(event.target.value)}
               />
             </label>

@@ -156,6 +156,7 @@ export const groups: Group[] = [
     id: 'space-rpg',
     title: 'Космические РПГ',
     members: '12 480',
+    memberList: [],
     topic: 'карта редких событий Starfall Odyssey',
     description:
       'Сообщество для игроков, которые проходят сюжетные космические РПГ, собирают экспедиции и публикуют разборы сезонных событий.',
@@ -208,6 +209,7 @@ export const groups: Group[] = [
     id: 'tactics',
     title: 'Тактический клуб',
     members: '8 910',
+    memberList: [],
     topic: 'турнир Crystal Tactics на выходных',
     description:
       'Группа для пошаговых стратегий, дуэлей, турнирных сеток и разборов тактических партий.',
@@ -260,6 +262,7 @@ export const groups: Group[] = [
     id: 'indie-evening',
     title: 'Инди на вечер',
     members: '4 725',
+    memberList: [],
     topic: 'подборка коротких сюжетных игр',
     description:
       'Спокойное сообщество для коротких инди-прохождений, отзывов без перегруза и подборок на один вечер.',

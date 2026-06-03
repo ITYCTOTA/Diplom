@@ -31,6 +31,7 @@ export type Group = {
   id: string
   title: string
   members: string
+  memberList: GroupMember[]
   topic: string
   description: string
   online: string
@@ -47,6 +48,13 @@ export type Group = {
   discussions: GroupDiscussion[]
 }
 
+export type GroupMember = {
+  id: string
+  nickname: string
+  role: string
+  joinedAt: string
+}
+
 export type GroupPost = {
   id: string
   author: string
@@ -54,6 +62,7 @@ export type GroupPost = {
   text: string
   time: string
   likes: number
+  likedByMe?: boolean
   comments: number
   commentList?: GroupComment[]
 }
@@ -63,6 +72,8 @@ export type GroupComment = {
   author: string
   text: string
   time: string
+  likes: number
+  likedByMe?: boolean
 }
 
 export type GroupDiscussion = {
@@ -78,6 +89,17 @@ export type Friend = {
   status: string
   game: string
   level: number
+  bio?: string | null
+  friendsSince?: string
+}
+
+export type FriendRequest = {
+  id: string
+  userId: string
+  name: string
+  bio: string | null
+  direction: 'incoming' | 'outgoing'
+  createdAt: string
 }
 
 export type FriendSearchResult = {
@@ -85,13 +107,13 @@ export type FriendSearchResult = {
   name: string
   bio: string | null
   relation: 'available' | 'friend' | 'request_sent' | 'request_received'
+  requestId?: string | null
 }
 
 export type AuthUser = {
   id: string
   email: string
   nickname: string
-  walletBalanceCents: number
 }
 
 export type UserProfile = {
@@ -100,7 +122,6 @@ export type UserProfile = {
   nickname: string
   bio: string | null
   createdAt: string
-  walletBalanceCents: number
   stats: {
     libraryCount: number
     totalMinutes: number

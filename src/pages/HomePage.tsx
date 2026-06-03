@@ -47,16 +47,16 @@ export function HomePage({
               </button>
             </div>
           </div>
-          <GameArt game={heroGame} size="large" />
+          <GameArt game={heroGame} size="large" priority="high" />
         </article>
 
         <section className="panel">
           {isAuthenticated ? (
             <>
-              <SectionTitle title="Недавно играли" meta={`${libraryGames.length} в библиотеке`} />
+              <SectionTitle title="Недавно играли" />
               {libraryGames.length > 0 ? (
                 <div className="recent-list">
-                  {libraryGames.map((game) => (
+                  {libraryGames.slice(0, 3).map((game) => (
                     <button
                       key={game.id}
                       type="button"
@@ -66,7 +66,7 @@ export function HomePage({
                       <GameArt game={game} size="small" />
                       <span>
                         <strong>{game.title}</strong>
-                        <small>{game.activity}</small>
+                        {game.activity ? <small>{game.activity}</small> : null}
                       </span>
                     </button>
                   ))}

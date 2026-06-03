@@ -4,9 +4,9 @@ import { optionalString } from '../../utils/validation.js'
 import { acceptFriendRequest, createFriendRequest, getFriends, searchUsers } from './friends.service.js'
 
 export async function listFriendsController(request: AuthRequest, response: Response) {
-  const friends = await getFriends(request.user!.id)
+  const result = await getFriends(request.user!.id)
 
-  response.json({ friends })
+  response.json(result)
 }
 
 export async function createFriendRequestController(request: AuthRequest, response: Response) {

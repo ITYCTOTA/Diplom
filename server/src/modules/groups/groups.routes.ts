@@ -6,9 +6,11 @@ import {
   createGroupController,
   createGroupPostController,
   getGroupController,
+  getMyGroupMembershipsController,
   joinGroupController,
   leaveGroupController,
   listGroupsController,
+  toggleGroupCommentLikeController,
   toggleGroupLikeController,
 } from './groups.controller.js'
 
@@ -16,9 +18,11 @@ export const groupsRouter = Router()
 
 groupsRouter.get('/', asyncHandler(listGroupsController))
 groupsRouter.post('/', authMiddleware, asyncHandler(createGroupController))
+groupsRouter.get('/memberships/me', authMiddleware, asyncHandler(getMyGroupMembershipsController))
 groupsRouter.get('/:groupId', asyncHandler(getGroupController))
 groupsRouter.post('/:groupId/join', authMiddleware, asyncHandler(joinGroupController))
 groupsRouter.delete('/:groupId/join', authMiddleware, asyncHandler(leaveGroupController))
 groupsRouter.post('/:groupId/posts', authMiddleware, asyncHandler(createGroupPostController))
 groupsRouter.post('/posts/:postId/comments', authMiddleware, asyncHandler(createGroupCommentController))
 groupsRouter.post('/posts/:postId/like', authMiddleware, asyncHandler(toggleGroupLikeController))
+groupsRouter.post('/comments/:commentId/like', authMiddleware, asyncHandler(toggleGroupCommentLikeController))
