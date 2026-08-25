@@ -35,6 +35,20 @@
 - JWT;
 - bcrypt.
 
+## Создание схемы и тестовых данных
+
+```bash
+npm --prefix server run db:schema
+npm --prefix server run db:seed
+```
+
+## Для запуска
+
+```bash
+npm run dev:client
+npm run dev:server
+```
+
 ## Архитектура
 
 Клиентская часть организована по FSD:
