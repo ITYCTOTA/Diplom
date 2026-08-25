@@ -162,7 +162,6 @@ function App() {
 
   const dismissRouteModals = useCallback(() => {
     setPurchaseGame(null)
-    setIsPurchasePending(false)
     setFriendSearchView(null)
     setCreateGroupView(null)
     setPurchaseView(null)
@@ -318,6 +317,10 @@ function App() {
   const openFriendSearch = () => setFriendSearchView(activeView)
   const openCreateGroup = () => setCreateGroupView(activeView)
   const requestPurchase = (game: Game) => {
+    if (isPurchasePending) {
+      return
+    }
+
     if (!authUser) {
       navigate('auth')
       return
@@ -327,15 +330,20 @@ function App() {
     setPurchaseView(activeView)
   }
   const confirmPurchase = async () => {
-    if (!purchaseGame) {
+    if (!purchaseGame || isPurchasePending) {
       return
     }
 
+    const gameToPurchase = purchaseGame
     setIsPurchasePending(true)
-    await addToLibrary(purchaseGame)
-    setIsPurchasePending(false)
-    setPurchaseGame(null)
-    setPurchaseView(null)
+
+    try {
+      await addToLibrary(gameToPurchase)
+    } finally {
+      setIsPurchasePending(false)
+      setPurchaseGame(null)
+      setPurchaseView(null)
+    }
   }
 
   const createGroupFromModal = async (title: string, description: string) => {
