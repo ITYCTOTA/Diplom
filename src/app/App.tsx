@@ -362,6 +362,7 @@ function App() {
 
         return (
           <GamePage
+            key={selectedGame.id}
             authUserId={authUser?.id}
             game={selectedGame}
             games={games}
