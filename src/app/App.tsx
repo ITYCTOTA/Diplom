@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState, type CSSProperties } from 'react'
+import { Suspense, lazy, useCallback, useMemo, useState, type CSSProperties } from 'react'
 import gamehubBackground from '@/app/assets/gamehub-bg.png'
 import { WorkspaceLoader } from '@/widgets/workspace-loader'
 import { WorkspaceError } from '@/widgets/workspace-error'
@@ -151,7 +151,23 @@ function buildWorkspaceError(message: string): WorkspaceErrorState {
 }
 
 function App() {
-  const { activeView, selectedBackView, selectedGameId, selectedGroupId, navigate } = useGameHubRoute()
+  const [genre, setGenre] = useState('Все')
+  const [searchDrafts, setSearchDrafts] = useState<Record<SearchScope, string>>(emptySearchState)
+  const [searchTerms, setSearchTerms] = useState<Record<SearchScope, string>>(emptySearchState)
+  const [purchaseGame, setPurchaseGame] = useState<Game | null>(null)
+  const [isPurchasePending, setIsPurchasePending] = useState(false)
+  const [friendSearchView, setFriendSearchView] = useState<ViewId | null>(null)
+  const [createGroupView, setCreateGroupView] = useState<ViewId | null>(null)
+  const [purchaseView, setPurchaseView] = useState<ViewId | null>(null)
+
+  const dismissRouteModals = useCallback(() => {
+    setPurchaseGame(null)
+    setFriendSearchView(null)
+    setCreateGroupView(null)
+    setPurchaseView(null)
+  }, [])
+
+  const { activeView, selectedBackView, selectedGameId, selectedGroupId, navigate } = useGameHubRoute(dismissRouteModals)
   const {
     addToLibrary,
     acceptFriendRequest,
@@ -182,14 +198,6 @@ function App() {
     updateGameRating,
   } = useGameHubState()
 
-  const [genre, setGenre] = useState('Все')
-  const [searchDrafts, setSearchDrafts] = useState<Record<SearchScope, string>>(emptySearchState)
-  const [searchTerms, setSearchTerms] = useState<Record<SearchScope, string>>(emptySearchState)
-  const [purchaseGame, setPurchaseGame] = useState<Game | null>(null)
-  const [isPurchasePending, setIsPurchasePending] = useState(false)
-  const [friendSearchView, setFriendSearchView] = useState<ViewId | null>(null)
-  const [createGroupView, setCreateGroupView] = useState<ViewId | null>(null)
-  const [purchaseView, setPurchaseView] = useState<ViewId | null>(null)
 
   const isFriendSearchOpen = friendSearchView === activeView
   const isCreateGroupOpen = createGroupView === activeView
@@ -309,6 +317,10 @@ function App() {
   const openFriendSearch = () => setFriendSearchView(activeView)
   const openCreateGroup = () => setCreateGroupView(activeView)
   const requestPurchase = (game: Game) => {
+    if (isPurchasePending) {
+      return
+    }
+
     if (!authUser) {
       navigate('auth')
       return
@@ -318,15 +330,20 @@ function App() {
     setPurchaseView(activeView)
   }
   const confirmPurchase = async () => {
-    if (!purchaseGame) {
+    if (!purchaseGame || isPurchasePending) {
       return
     }
 
+    const gameToPurchase = purchaseGame
     setIsPurchasePending(true)
-    await addToLibrary(purchaseGame)
-    setIsPurchasePending(false)
-    setPurchaseGame(null)
-    setPurchaseView(null)
+
+    try {
+      await addToLibrary(gameToPurchase)
+    } finally {
+      setIsPurchasePending(false)
+      setPurchaseGame(null)
+      setPurchaseView(null)
+    }
   }
 
   const createGroupFromModal = async (title: string, description: string) => {

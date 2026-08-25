@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { readRouteFromLocation, routeHash } from './navigation'
 import type { ViewId } from './model/types'
 
-export function useGameHubRoute() {
+type RouteChangeHandler = () => void
+
+export function useGameHubRoute(onRouteChange?: RouteChangeHandler) {
   const [activeView, setActiveView] = useState<ViewId>(() => readRouteFromLocation().view)
   const [selectedGameId, setSelectedGameId] = useState(() => readRouteFromLocation().gameId)
   const [selectedGroupId, setSelectedGroupId] = useState(() => readRouteFromLocation().groupId)
@@ -10,6 +12,7 @@ export function useGameHubRoute() {
 
   useEffect(() => {
     const syncRoute = () => {
+      onRouteChange?.()
       const route = readRouteFromLocation()
       setSelectedGameId(route.gameId)
       setSelectedGroupId(route.groupId)
@@ -34,9 +37,10 @@ export function useGameHubRoute() {
       window.removeEventListener('popstate', syncRoute)
       window.removeEventListener('hashchange', syncRoute)
     }
-  }, [])
+  }, [onRouteChange])
 
   const navigate = (view: ViewId, entityId?: string) => {
+    onRouteChange?.()
     const nextGameId = view === 'game' ? (entityId ?? selectedGameId) : selectedGameId
     const nextGroupId = view === 'group' ? (entityId ?? selectedGroupId) : selectedGroupId
     const nextBackView =
