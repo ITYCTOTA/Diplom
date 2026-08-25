@@ -7,7 +7,7 @@ type LibraryRow = {
   title: string
   description: string
   price_cents: number
-  rating: string
+  rating: string | null
   cover_url: string | null
   cover_tone: string
   cover_tone_two: string
@@ -23,7 +23,7 @@ function toLibraryItem(row: LibraryRow) {
     title: row.title,
     description: row.description,
     priceCents: row.price_cents,
-    rating: Number(row.rating),
+    rating: row.rating === null ? null : Number(row.rating),
     coverUrl: row.cover_url,
     coverTone: row.cover_tone,
     coverToneTwo: row.cover_tone_two,
@@ -43,7 +43,7 @@ export async function getUserLibrary(userId: string) {
         g.title,
         g.description,
         g.price_cents,
-        g.rating,
+        MAX(rv.rating) AS rating,
         g.cover_url,
         g.cover_tone,
         g.cover_tone_two,
@@ -52,6 +52,11 @@ export async function getUserLibrary(userId: string) {
         COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
       FROM library_items li
       JOIN games g ON g.id = li.game_id
+      LEFT JOIN LATERAL (
+        SELECT ROUND(AVG(r.rating)::numeric, 1) AS rating
+        FROM reviews r
+        WHERE r.game_id = g.id
+      ) rv ON true
       LEFT JOIN game_genres gg ON gg.game_id = g.id
       LEFT JOIN genres ge ON ge.id = gg.genre_id
       LEFT JOIN game_tags gt ON gt.game_id = g.id
