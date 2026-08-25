@@ -4,6 +4,10 @@
 
 Проект состоит из frontend-части на React и TypeScript и backend-части на Node.js, Express и PostgreSQL.
 
+<img width="2100" height="978" alt="image" src="https://github.com/user-attachments/assets/632af3a8-bf08-4ee7-be5f-65565d9f219e" />
+<img width="2109" height="973" alt="image" src="https://github.com/user-attachments/assets/507e9270-cdc4-4af3-989b-61e9d5d30492" />
+<img width="2101" height="907" alt="image" src="https://github.com/user-attachments/assets/b6202b4b-613b-4e30-adf2-020a433d57fe" />
+
 ## Возможности
 
 * регистрация и авторизация пользователей;
