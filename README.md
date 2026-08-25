@@ -1,75 +1,49 @@
-# React + TypeScript + Vite
+# GameHub
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Информационная система для поиска, покупки и организации игровой библиотеки с социальными функциями.
 
-Currently, two official plugins are available:
+Проект выполнен в рамках дипломной работы. Пользователь может зарегистрироваться, просматривать каталог игр, добавлять игры в библиотеку, оставлять отзывы с оценкой, работать с группами и друзьями.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Возможности
 
-## React Compiler
+- регистрация и авторизация по JWT;
+- каталог игр с поиском и фильтрацией по жанру;
+- страница игры, отзывы и пользовательские оценки;
+- покупка игры с подтверждением и добавлением в библиотеку;
+- персональные рекомендации без уже купленных игр;
+- профиль пользователя и публикации;
+- группы: создание, вступление, посты, комментарии и лайки;
+- друзья: поиск, заявки и подтверждение дружбы;
+- обработка сетевых ошибок и состояний загрузки.
 
-The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
+## Технологии
 
-Note: This will impact Vite dev & build performances.
+**Клиент**
 
-## Expanding the ESLint configuration
+- React 19;
+- TypeScript;
+- Vite;
+- Feature-Sliced Design;
+- CSS.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+**Сервер**
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js;
+- Express;
+- PostgreSQL;
+- `pg`;
+- JWT;
+- bcrypt.
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## Архитектура
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+Клиентская часть организована по FSD:
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+```text
+src/
+  app/        # инициализация, роутинг, глобальное состояние и стили
+  pages/      # страницы приложения
+  widgets/    # крупные блоки интерфейса
+  features/   # пользовательские сценарии
+  entities/   # сущности предметной области
+  shared/     # переиспользуемые UI-компоненты, API и конфигурация
