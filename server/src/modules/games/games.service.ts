@@ -7,7 +7,7 @@ export type GameDto = {
   title: string
   description: string
   priceCents: number
-  rating: number
+  rating: number | null
   coverUrl: string | null
   coverTone: string
   coverToneTwo: string
@@ -21,7 +21,7 @@ type GameRow = {
   title: string
   description: string
   price_cents: number
-  rating: string
+  rating: string | null
   cover_url: string | null
   cover_tone: string
   cover_tone_two: string
@@ -36,7 +36,7 @@ function toGameDto(row: GameRow): GameDto {
     title: row.title,
     description: row.description,
     priceCents: row.price_cents,
-    rating: Number(row.rating),
+    rating: row.rating === null ? null : Number(row.rating),
     coverUrl: row.cover_url,
     coverTone: row.cover_tone,
     coverToneTwo: row.cover_tone_two,
@@ -52,13 +52,18 @@ const gameSelect = `
     g.title,
     g.description,
     g.price_cents,
-    g.rating,
+    MAX(rv.rating) AS rating,
     g.cover_url,
     g.cover_tone,
     g.cover_tone_two,
     COALESCE(array_agg(DISTINCT ge.name) FILTER (WHERE ge.name IS NOT NULL), '{}') AS genres,
     COALESCE(array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL), '{}') AS tags
   FROM games g
+  LEFT JOIN LATERAL (
+    SELECT ROUND(AVG(r.rating)::numeric, 1) AS rating
+    FROM reviews r
+    WHERE r.game_id = g.id
+  ) rv ON true
   LEFT JOIN game_genres gg ON gg.game_id = g.id
   LEFT JOIN genres ge ON ge.id = gg.genre_id
   LEFT JOIN game_tags gt ON gt.game_id = g.id
@@ -89,7 +94,7 @@ export async function getGames(search?: string, genre?: string) {
       ${gameSelect}
       ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
       GROUP BY g.id
-      ORDER BY g.rating DESC, g.title ASC
+      ORDER BY MAX(rv.rating) DESC NULLS LAST, g.title ASC
     `,
     params,
   )
